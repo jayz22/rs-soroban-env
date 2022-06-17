@@ -347,8 +347,8 @@ impl Host {
         hot: HOT,
     ) -> Result<HostObj, HostError> {
         let handle = self.0.objects.borrow().len();
-        if handle > u32::MAX as usize {
-            return Err(HostError::General("object handle exceeds u32::MAX"));
+        if handle >= u32::MAX as usize {
+            return Err(HostError::General("object handle reaches u32::MAX"));
         }
         self.0.objects.borrow_mut().push(HOT::inject(hot));
         let env = WeakHost(Rc::downgrade(&self.0));
