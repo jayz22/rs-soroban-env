@@ -4,14 +4,24 @@
 mod common;
 
 use common::*;
+use crypto_bigint::{Random, U256, U8192};
 use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signature, Signer, Verifier};
+// use im_rc::Vector;
+use num_bigint::{BigInt, Sign};
+use num_integer::Integer;
+use num_traits::FromPrimitive;
 use rand::SeedableRng;
+use rand_chacha; // 0.3.0
+                 // use rand_chacha::rand_core::SeedableRng;
+                 // use rand_core::RngCore;
 use sha2::{Digest, Sha256};
 use soroban_env_host::{
     budget::CostType,
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVec},
     EnvVal, Host, RawVal,
 };
+
+const DIVIDEND: u64 = 71;
 
 struct ScVecToHostVecRun {
     val: ScVal,
@@ -63,6 +73,26 @@ struct VerifyEd25519SigRun {
     key: PublicKey,
     msg: Vec<u8>,
     sig: Signature,
+}
+
+struct BigIntDivRem {
+    divisor: BigInt,
+    dividend: BigInt,
+}
+
+struct CryptoU256DivRem {
+    divisor: U256,
+    dividend: U256,
+}
+
+struct CryptoU8192DivRem {
+    divisor: U8192,
+    dividend: U8192,
+}
+
+struct CryptoU256DivRemFixedDivisor {
+    divisor: U256,
+    dividend: U256,
 }
 
 /// Measures the costs of allocating vectors of varying sizes.
@@ -322,31 +352,137 @@ impl HostCostMeasurement for VerifyEd25519SigRun {
     }
 }
 
+impl HostCostMeasurement for BigIntDivRem {
+    const COST_TYPE: CostType = CostType::BigIntDivRem;
+
+    fn new(_host: &Host, input_hint: u64) -> Self {
+        let size_hint = input_hint;
+        let buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+        let divisor = BigInt::from_bytes_le(Sign::Plus, buf.as_slice());
+        Self {
+            divisor,
+            dividend: BigInt::from_u64(DIVIDEND).unwrap(),
+        }
+    }
+
+    fn get_input(&self, _host: &Host) -> u64 {
+        self.divisor.bits()
+    }
+
+    fn run(&mut self, _host: &Host) {
+        self.divisor.div_rem(&self.dividend);
+    }
+}
+
+impl HostCostMeasurement for CryptoU256DivRem {
+    const COST_TYPE: CostType = CostType::BigIntDivRem;
+
+    fn new(_host: &Host, input_hint: u64) -> Self {
+        let size_hint = input_hint;
+        let mut buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+        buf.resize(32, 0);
+        let divisor = U256::from_le_slice(&buf);
+        // use rand_chacha::rand_core::SeedableRng;
+        // let rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
+        // let divisor = U256::random(rng);
+        // println!("{:?}", divisor);
+        Self {
+            divisor,
+            dividend: U256::from_u64(DIVIDEND),
+        }
+    }
+
+    fn get_input(&self, _host: &Host) -> u64 {
+        self.divisor.clone().bits_vartime() as u64
+    }
+
+    fn run(&mut self, _host: &Host) {
+        self.divisor.div_rem(&self.dividend);
+    }
+}
+
+impl HostCostMeasurement for CryptoU8192DivRem {
+    const COST_TYPE: CostType = CostType::BigIntDivRem;
+
+    fn new(_host: &Host, input_hint: u64) -> Self {
+        let size_hint = input_hint;
+        // let size_hint = 10;
+        let mut buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+        // println!("{:?}", buf);
+
+        buf.resize(1024, 0);
+        let divisor = U8192::from_le_slice(&buf);
+        // println!("{:?}", divisor);
+        Self {
+            divisor,
+            dividend: U8192::from_u64(2),
+        }
+    }
+
+    fn get_input(&self, _host: &Host) -> u64 {
+        self.divisor.clone().bits_vartime() as u64
+    }
+
+    fn run(&mut self, _host: &Host) {
+        // for _ in 0..100 {
+        //     self.divisor.div_rem(&self.dividend);
+        // }
+        self.divisor.div_rem(&self.dividend);
+        // println!("{:?}", res);
+    }
+}
+
+impl HostCostMeasurement for CryptoU256DivRemFixedDivisor {
+    const COST_TYPE: CostType = CostType::BigIntDivRem;
+
+    fn new(_host: &Host, input_hint: u64) -> Self {
+        let size_hint = input_hint;
+        let mut buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+        buf.resize(32, 0);
+        let divisor =
+            U256::from_be_hex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
+        let dividend = U256::from_le_slice(&buf);
+        Self { divisor, dividend }
+    }
+
+    fn get_input(&self, _host: &Host) -> u64 {
+        self.dividend.clone().bits_vartime() as u64
+    }
+
+    fn run(&mut self, _host: &Host) {
+        self.divisor.div_rem(&self.dividend);
+    }
+}
+
 fn measure_one<M: HostCostMeasurement>() -> std::io::Result<()> {
-    let mut measurements = measure_costs::<M>(0..20)?;
-    measurements.subtract_baseline();
+    let mut measurements = measure_costs::<M>(0..33)?;
+    // measurements.subtract_baseline();
     measurements.report();
 
-    if std::env::var("FIT_MODELS").is_ok() {
-        measurements.fit_model_to_cpu();
-        measurements.fit_model_to_mem();
-    }
+    // if std::env::var("FIT_MODELS").is_ok() {
+    //     measurements.fit_model_to_cpu();
+    //     measurements.fit_model_to_mem();
+    // }
     Ok(())
 }
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
     env_logger::init();
-    measure_one::<ScVecToHostVecRun>()?;
-    measure_one::<ScMapToHostMapRun>()?;
-    measure_one::<ImVecNewRun>()?;
-    measure_one::<ImMapImmutEntryRun>()?;
-    measure_one::<ImMapMutEntryRun>()?;
-    measure_one::<ImVecImmutEntryRun>()?;
-    measure_one::<ImVecMutEntryRun>()?;
-    measure_one::<HostObjAllocSlotRun>()?;
-    measure_one::<ComputeSha256HashRun>()?;
-    measure_one::<ComputeEd25519PubKeyRun>()?;
-    measure_one::<VerifyEd25519SigRun>()?;
+    // measure_one::<ScVecToHostVecRun>()?;
+    // measure_one::<ScMapToHostMapRun>()?;
+    // measure_one::<ImVecNewRun>()?;
+    // measure_one::<ImMapImmutEntryRun>()?;
+    // measure_one::<ImMapMutEntryRun>()?;
+    // measure_one::<ImVecImmutEntryRun>()?;
+    // measure_one::<ImVecMutEntryRun>()?;
+    // measure_one::<HostObjAllocSlotRun>()?;
+    // measure_one::<ComputeSha256HashRun>()?;
+    // measure_one::<ComputeEd25519PubKeyRun>()?;
+    // measure_one::<VerifyEd25519SigRun>()?;
+    // measure_one::<BigIntDivRem>()?;
+    // measure_one::<CryptoU256DivRem>()?;
+    // measure_one::<CryptoU8192DivRem>()?;
+    measure_one::<CryptoU256DivRemFixedDivisor>()?;
     Ok(())
 }

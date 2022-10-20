@@ -235,3 +235,33 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     Ok(())
 }
+
+#[test]
+fn test_u8192() {
+    //let size_hint = input_hint * 10;
+    use crypto_bigint::U8192;
+    let size_hint = 10;
+    let mut buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+    println!("{:?}", buf);
+
+    buf.resize(1024, 0);
+    let divisor = U8192::from_le_slice(&buf);
+    println!("{:?}", divisor);
+    let num_bits = divisor.bits_vartime();
+    println!("{:?}", num_bits);
+}
+
+#[test]
+fn test_u256() {
+    //let size_hint = input_hint * 10;
+    use crypto_bigint::U256;
+    let size_hint = 10;
+    let mut buf = (0..size_hint).map(|i| i as u8).collect::<Vec<u8>>();
+    println!("{:?}", buf);
+
+    buf.resize(32, 0);
+    let divisor = U256::from_le_slice(&buf);
+    println!("{:?}", divisor);
+    let num_bits = divisor.bits_vartime();
+    println!("{:?}", num_bits);
+}
