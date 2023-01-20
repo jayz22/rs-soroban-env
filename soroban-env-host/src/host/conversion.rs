@@ -276,4 +276,34 @@ impl Host {
             .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
     }
+
+    pub(crate) fn blackjack_cards_from_obj(
+        &self,
+        args: Object,
+    ) -> Result<(u32, u32, u32), HostError> {
+        let v: Vec<RawVal> =
+            self.visit_obj(args, |hv: &HostVec| Ok(hv.iter().cloned().collect()))?;
+        if v.len() != 3 {
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "input length must be 3",
+            ));
+        }
+        let a = self.u32_from_rawval_input("a", v[0])?;
+        let b = self.u32_from_rawval_input("b", v[1])?;
+        let c = self.u32_from_rawval_input("c", v[2])?;
+        Ok((a, b, c))
+    }
+
+    pub(crate) fn blackjack_target_from_obj(&self, args: Object) -> Result<u32, HostError> {
+        let v: Vec<RawVal> =
+            self.visit_obj(args, |hv: &HostVec| Ok(hv.iter().cloned().collect()))?;
+        if v.len() != 1 {
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "input length must be 3",
+            ));
+        }
+        self.u32_from_rawval_input("a", v[0])
+    }
 }

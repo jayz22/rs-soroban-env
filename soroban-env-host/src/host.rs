@@ -48,6 +48,8 @@ use self::metered_clone::MeteredClone;
 use self::metered_vector::MeteredVector;
 use crate::Compare;
 
+use crate::zk::plonk::Plonk;
+
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 // Notes on metering: `RollbackPoint` are metered under Frame operations
@@ -2270,5 +2272,27 @@ impl VmCallerCheckedEnv for Host {
 
     fn dummy0(&self, vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<RawVal, Self::Error> {
         Ok(().into())
+    }
+
+    fn prove(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        priv_inputs: Object,
+        pub_inputs: Object,
+    ) -> Result<Object, Self::Error> {
+        let (a, b, c) = self.blackjack_cards_from_obj(priv_inputs)?;
+        let target = self.blackjack_target_from_obj(pub_inputs)?;
+        Ok(Plonk::generate_proof(self, a, b, c, target))
+    }
+
+    fn verify(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        proof: Object,
+        pub_inputs: Object,
+    ) -> Result<RawVal, Self::Error> {
+        let bytes = self.visit_obj(proof, |bytes: &Vec<u8>| Ok(bytes.clone()))?;
+        let pi = self.blackjack_target_from_obj(pub_inputs)?;
+        Ok(Plonk::verify_proof(self, bytes.as_slice(), pi))
     }
 }

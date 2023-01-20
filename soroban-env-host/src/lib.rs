@@ -51,3 +51,5 @@ pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
 };
 pub use soroban_env_common::*;
+
+mod zk;
