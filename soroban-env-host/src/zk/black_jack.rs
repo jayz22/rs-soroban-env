@@ -1,7 +1,9 @@
 use dusk_plonk::prelude::*;
 
-// Implement a circuit that checks:
-// a + b + c < D where D is a PI
+/// [`BlackJack`] is a simple arithmetic circuit that mimics a blackjack game:
+/// `a`, `b`, `c` are secret witnesses that represents three cards
+/// `d` is a bool decision: 0 is STAND, 1 is HIT
+/// A HIT is allowed only if  `a + b + c < 21`
 #[derive(Debug, Default)]
 pub struct BlackJack {
     pub(crate) a: BlsScalar,
@@ -18,36 +20,28 @@ impl Circuit for BlackJack {
         let c = composer.append_witness(self.c);
         let d = composer.append_public_witness(self.d);
 
-        // computes `lhs = a + b + c` this is not a bug, assign c to witness d
-        let constraint = Constraint::new().left(1).right(1).fourth(1).a(a).b(b).d(c);
-        let lhs = composer.gate_add(constraint);
-
-        // computes `diff = lhs - d`
-        let constraint2 = Constraint::new()
+        // Make first constraint a + b + c + 42
+        let constraint = Constraint::new()
             .left(1)
-            .right(-BlsScalar::one())
-            .a(lhs)
-            .b(d);
-        let diff = composer.gate_add(constraint2);
-        let constraint3 = Constraint::new().left(1).right(1).a(diff);
-        composer.append_gate(constraint3);
+            .right(1)
+            .fourth(1)
+            .constant(42u64)
+            .a(a)
+            .b(b)
+            .d(c);
+        let sum = composer.gate_add(constraint);
 
-        // Below is my failed attempt to assert the diff < 0.
-        // let bits: [Witness; 64] = composer.component_decomposition(diff);
-        // let sign_bit = bits[0];
-        // let one = composer.append_constant(BlsScalar::one());
-        // let constraint4 = Constraint::new()
-        //     .left(1)
-        //     .right(-BlsScalar::one())
-        //     .a(sign_bit)
-        //     .b(one);
-        // composer.append_gate(constraint4);
+        // Check that sum is in range
+        // e.g. if num_bits == 6, then sum < 2^6 = 64.
+        composer.component_range(sum, 6);
+        // check d is boolean
+        composer.component_boolean(d);
 
         Ok(())
     }
 
     fn public_inputs(&self) -> Vec<PublicInputValue> {
-        vec![self.c.into()]
+        vec![self.d.into()]
     }
 
     fn padded_gates(&self) -> usize {

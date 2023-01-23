@@ -30,6 +30,7 @@ backtrace = "0.3"
 # Below are dependencies from the ZK hackathon
 dusk-plonk = "0.11"
 rand_core = { version = "0.6", default-features = false }
+getrandom = { version = "0.2.8", features = ["js"] }
 dusk-jubjub = { version = "0.11", default-features = false }
 dusk-bytes = "0.1"
 
