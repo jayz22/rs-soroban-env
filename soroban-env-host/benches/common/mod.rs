@@ -5,7 +5,7 @@ mod measure;
 mod modelfit;
 mod util;
 
-use cost_types::*;
+pub(crate) use cost_types::*;
 pub use measure::*;
 pub use modelfit::*;
 

@@ -12,7 +12,13 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError};
+use crate::{
+    budget::{AsBudget, Budget},
+    err,
+    host::Frame,
+    xdr::ContractCostType,
+    HostError,
+};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, RawVal, Symbol};
@@ -24,7 +30,9 @@ use soroban_env_common::{
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{
+    Engine, FuelConsumptionMode, Func, Instance, InstancePre, Linker, Memory, Module, Store, Value,
+};
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::{
@@ -116,6 +124,78 @@ impl Vm {
         }
     }
 
+    pub fn engine(budget: &Budget) -> Engine {
+        let mut config = wasmi::Config::default();
+        let fuel_costs = budget.wasmi_fuel_costs();
+
+        // Turn off all optional wasm features.
+        config
+            .wasm_multi_value(false)
+            .wasm_mutable_global(false)
+            .wasm_saturating_float_to_int(false)
+            .wasm_sign_extension(false)
+            .floats(false)
+            .consume_fuel(true)
+            .fuel_consumption_mode(FuelConsumptionMode::Eager)
+            .set_fuel_costs(fuel_costs);
+
+        Engine::new(&config)
+    }
+
+    pub fn module(
+        host: &Host,
+        engine: &Engine,
+        module_wasm_code: &[u8],
+    ) -> Result<Module, HostError> {
+        let module = host.map_err(Module::new(&engine, module_wasm_code))?;
+        Self::check_meta_section(host, &module)?;
+        Ok(module)
+    }
+
+    pub fn store(engine: &Engine, host: &Host) -> Store<Host> {
+        Store::new(engine, host.clone())
+    }
+
+    pub fn linker(
+        host: &Host,
+        engine: &Engine,
+        store: &mut Store<Host>,
+    ) -> Result<Linker<Host>, HostError> {
+        let mut linker = <Linker<Host>>::new(engine);
+
+        for hf in HOST_FUNCTIONS {
+            let func = (hf.wrap)(store);
+            host.map_err(
+                linker
+                    .define(hf.mod_str, hf.fn_str, func)
+                    .map_err(|le| wasmi::Error::Linker(le)),
+            )?;
+        }
+
+        Ok(linker)
+    }
+
+    pub fn instance_pre(
+        host: &Host,
+        linker: &Linker<Host>,
+        store: &mut Store<Host>,
+        module: &Module,
+    ) -> Result<InstancePre, HostError> {
+        host.map_err(linker.instantiate(store, module))
+    }
+
+    pub fn instance(
+        host: &Host,
+        not_started_instance: InstancePre,
+        store: &mut Store<Host>,
+    ) -> Result<Instance, HostError> {
+        host.map_err(
+            not_started_instance
+                .ensure_no_start(store)
+                .map_err(|ie| wasmi::Error::Instantiation(ie)),
+        )
+    }
+
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
@@ -139,49 +219,23 @@ impl Vm {
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
+        // `VmInstantiation` is const cost in both cpu and mem. It has weak variance on
         host.charge_budget(
             ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
         )?;
 
-        let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs();
+        let engine = Self::engine(host.as_budget());
 
-        // Turn off all optional wasm features.
-        config
-            .wasm_multi_value(false)
-            .wasm_mutable_global(false)
-            .wasm_saturating_float_to_int(false)
-            .wasm_sign_extension(false)
-            .floats(false)
-            .consume_fuel(true)
-            .fuel_consumption_mode(FuelConsumptionMode::Eager)
-            .set_fuel_costs(fuel_costs);
+        let module = Self::module(host, &engine, module_wasm_code)?;
 
-        let engine = Engine::new(&config);
-        let module = host.map_err(Module::new(&engine, module_wasm_code))?;
+        let mut store = Self::store(&engine, host);
 
-        Self::check_meta_section(host, &module)?;
+        let linker = Self::linker(host, &engine, &mut store)?;
 
-        let mut store = Store::new(&engine, host.clone());
-        let mut linker = <Linker<Host>>::new(&engine);
+        let not_started_instance = Self::instance_pre(host, &linker, &mut store, &module)?;
 
-        for hf in HOST_FUNCTIONS {
-            let func = (hf.wrap)(&mut store);
-            host.map_err(
-                linker
-                    .define(hf.mod_str, hf.fn_str, func)
-                    .map_err(|le| wasmi::Error::Linker(le)),
-            )?;
-        }
-
-        let not_started_instance = host.map_err(linker.instantiate(&mut store, &module))?;
-
-        let instance = host.map_err(
-            not_started_instance
-                .ensure_no_start(&mut store)
-                .map_err(|ie| wasmi::Error::Instantiation(ie)),
-        )?;
+        let instance = Self::instance(host, not_started_instance, &mut store)?;
 
         let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
             ext.into_memory()

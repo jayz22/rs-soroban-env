@@ -18,7 +18,7 @@ use super::{fit_model, FPCostModel};
 static GLOBAL: Allocator<System> = Allocator::system();
 
 #[derive(Clone)]
-pub struct MemTracker(Arc<AtomicU64>);
+pub struct MemTracker(pub Arc<AtomicU64>);
 impl AllocationTracker for MemTracker {
     fn allocated(
         &self,
@@ -350,7 +350,7 @@ mod cpu {
 
 #[cfg(target_os = "macos")]
 #[path = "."]
-mod cpu {
+pub mod cpu {
 
     #[path = "rusagev4.rs"]
     mod rusagev4;
@@ -372,6 +372,13 @@ mod cpu {
         }
         pub fn begin(&mut self) {
             self.0 = Self::get();
+        }
+
+        pub fn check_and_count(&mut self) -> u64 {
+            let curr = Self::get();
+            let count = curr - self.0;
+            self.0 = curr;
+            count
         }
 
         pub fn end_and_count(&mut self) -> u64 {
