@@ -70,3 +70,4 @@ pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
 pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/example_err.wasm").as_slice();
 pub const WRITE_BYTES: &[u8] =
     include_bytes!("../wasm-workspace/opt/soroban_write_upgrade_bytes_contract.wasm").as_slice();
+pub const UDT_POW: &[u8] = include_bytes!("../wasm-workspace/opt/example_udt_pow.wasm").as_slice();
