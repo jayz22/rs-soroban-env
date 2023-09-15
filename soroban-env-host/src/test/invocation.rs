@@ -12,6 +12,14 @@ use crate::{
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
+fn test_udt_pow() -> Result<(), HostError> {
+    let sym = Symbol::try_from_small_str("STATE")?;
+    println!("{:?}", sym);
+    println!("{:?}", sym.as_val().get_payload());
+    Ok(())
+}
+
+#[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let contract_id_obj = host.register_test_contract_wasm(ADD_I32);

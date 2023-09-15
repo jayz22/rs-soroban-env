@@ -2,7 +2,7 @@
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, I256};
 
 #[contracttype]
-pub struct State {
+struct State {
     pub count: I256,
     pub last_exp: u32,
 }
