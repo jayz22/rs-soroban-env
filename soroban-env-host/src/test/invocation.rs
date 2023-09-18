@@ -13,9 +13,14 @@ use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn test_udt_pow() -> Result<(), HostError> {
-    let sym = Symbol::try_from_small_str("STATE")?;
-    println!("{:?}", sym);
-    println!("{:?}", sym.as_val().get_payload());
+    let host = Host::default();
+    let _count = host.string_new_from_slice(&"count");
+    let _val = host.string_new_from_slice(&"val");
+    // host.i256_val_from_be_bytes(bytes)
+
+    // let sym = Symbol::try_from_small_str("STATE")?;
+    println!("{:?}", "count".as_bytes());
+    println!("{:?}", "val".as_bytes());
     Ok(())
 }
 
