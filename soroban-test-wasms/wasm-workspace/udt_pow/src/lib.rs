@@ -1,10 +1,11 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, I256};
 
+// Custom contract data
 #[contracttype]
 struct State {
-    pub count: I256,
-    pub last_exp: u32,
+    pub value: I256,
+    pub exp: u32,
 }
 
 const STATE: Symbol = symbol_short!("STATE");
@@ -14,17 +15,15 @@ pub struct PowerContract;
 
 #[contractimpl]
 impl PowerContract {
-    pub fn power(env: Env, exp: u32) -> I256 {
-        // Get the current state.
+    pub fn power(env: Env, exp: u32) {
+        // 1. Get the current state from the storage
         let mut state: State = env.storage().instance().get(&STATE).unwrap();
 
-        // Compute the power.
-        state.count = state.count.pow(exp);
-        state.last_exp = exp;
+        // 2. Compute the power
+        state.value = state.value.pow(exp);
+        state.exp = exp;
 
-        // Store the results.
+        // 3. Write result back to the storage
         env.storage().instance().set(&STATE, &state);
-
-        state.count
     }
 }
