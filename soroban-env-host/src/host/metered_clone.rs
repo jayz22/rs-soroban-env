@@ -1,6 +1,6 @@
 use std::{iter::FromIterator, mem, rc::Rc};
 
-use soroban_env_common::xdr::ExpirationEntry;
+use soroban_env_common::xdr::TtlEntry;
 
 use crate::{
     budget::AsBudget,
@@ -50,7 +50,7 @@ pub(crate) fn charge_shallow_copy<T: DeclaredSizeForMetering>(
         T::DECLARED_SIZE
     );
     budget.as_budget().charge(
-        ContractCostType::HostMemCpy,
+        ContractCostType::MemCpy,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
@@ -70,7 +70,7 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
         T::DECLARED_SIZE
     );
     budget.as_budget().charge(
-        ContractCostType::HostMemAlloc,
+        ContractCostType::MemAlloc,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
@@ -291,7 +291,7 @@ impl MeteredClone for ClaimableBalanceEntry {}
 impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
-impl MeteredClone for ExpirationEntry {}
+impl MeteredClone for TtlEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for EventError {}
@@ -550,7 +550,7 @@ impl MeteredClone for LedgerKey {
             | LedgerKey::LiquidityPool(_)
             | LedgerKey::ContractCode(_)
             | LedgerKey::ConfigSetting(_)
-            | LedgerKey::Expiration(_) => Ok(()),
+            | LedgerKey::Ttl(_) => Ok(()),
         }
     }
 }
@@ -570,7 +570,7 @@ impl MeteredClone for LedgerEntry {
                 Ok(())
             }
             Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
-            | LiquidityPool(_) | ConfigSetting(_) | Expiration(_) => Ok(()),
+            | LiquidityPool(_) | ConfigSetting(_) | Ttl(_) => Ok(()),
         }
     }
 }
