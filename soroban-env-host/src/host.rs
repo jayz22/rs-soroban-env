@@ -2624,14 +2624,6 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    pub(crate) fn set_lifecycle_event_hook(
-        &self,
-        hook: Option<HostLifecycleHook>,
-    ) -> Result<(), HostError> {
-        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
-        Ok(())
-    }
-
     pub(crate) fn call_any_lifecycle_hook(
         &self,
         event: HostLifecycleEvent,

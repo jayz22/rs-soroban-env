@@ -12,7 +12,7 @@ use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 
 use crate::{
     budget::{AsBudget, Budget},
-    host::HostLifecycleEvent,
+    host::{HostLifecycleEvent, HostLifecycleHook},
     storage::{SnapshotSource, Storage},
     xdr, Error, Host, HostError, LedgerInfo,
 };
@@ -240,6 +240,14 @@ impl Host {
             generate_account_id(),
             generate_bytes_array(),
         )
+    }
+
+    pub(crate) fn set_lifecycle_event_hook(
+        &self,
+        hook: Option<HostLifecycleHook>,
+    ) -> Result<(), HostError> {
+        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+        Ok(())
     }
 
     pub(crate) fn measured_call(
