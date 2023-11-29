@@ -534,6 +534,51 @@ impl Display for BudgetImpl {
     }
 }
 
+#[cfg(test)]
+impl BudgetImpl {
+    fn write_default_params_to_cpp(&self) {
+        // cpu
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(cpu) = self.cpu_insns.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                cpu.const_term, cpu.lin_term.0
+            );
+            println!("break;");
+        }
+        // mem
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(mem) = self.mem_bytes.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                mem.const_term, mem.lin_term.0
+            );
+            println!("break;");
+        }
+        println!();
+        println!();
+        println!();
+    }
+}
+
+#[test]
+fn test_for_good() {
+    let bi = BudgetImpl::default();
+    bi.write_default_params_to_cpp()
+}
+
 #[derive(Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
