@@ -12,7 +12,6 @@ use soroban_test_wasms::{
 };
 
 use crate::auth::RecordedAuthPayload;
-use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
 use crate::builtin_contracts::testutils::{
     create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
@@ -116,9 +115,6 @@ impl SignNode {
 impl AuthTest {
     fn setup_with_contract(signer_cnt: usize, contract_cnt: usize, contract_wasm: &[u8]) -> Self {
         let host = Host::test_host_with_recording_footprint();
-        // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
-        // to respect the budget limit.
-        host.as_budget().reset_unlimited().unwrap();
         host.enable_debug().unwrap();
 
         host.with_mut_ledger_info(|li| {
@@ -288,6 +284,8 @@ impl AuthTest {
             );
         }
         assert_eq!(res.is_ok(), success);
+
+        self.host.budget_ref().reset_default().unwrap();
     }
 
     fn read_nonce_live_until(&self, address: &Address, nonce: i64) -> Option<u32> {
@@ -373,7 +371,9 @@ impl AuthTest {
         self.host
             .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();
-        self.host.get_recorded_auth_payloads().unwrap()
+        let res = self.host.get_recorded_auth_payloads().unwrap();
+        self.host.budget_ref().reset_default().unwrap();
+        res
     }
 
     fn test_recording_and_enforcing_no_auth(
@@ -3168,11 +3168,13 @@ fn test_rollback_with_conditional_custom_account_auth() {
 
     let do_call = |auth_entries| {
         test.host.set_authorization_entries(auth_entries).unwrap();
-        test.host.call(
+        let res = test.host.call(
             test.contracts[0].clone().into(),
             Symbol::try_from_val(&test.host, &"conditional_auth").unwrap(),
             test_vec![&test.host, &account, &test.contracts[1]].into(),
-        )
+        );
+        test.host.budget_ref().reset_default().unwrap();
+        res
     };
 
     // No auth entries at all - fail.
