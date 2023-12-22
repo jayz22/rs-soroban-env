@@ -4,7 +4,7 @@ use crate::{
     Host, HostError,
 };
 
-use wasmi::{errors::FuelError, Caller, Store};
+use wasmi::{errors::{ErrorKind, FuelError}, Caller, Store};
 
 pub(crate) trait FuelRefillable {
     fn fuel_consumed(&self) -> Result<u64, HostError>;
@@ -45,24 +45,24 @@ macro_rules! impl_refillable_for_store {
         impl<'a> FuelRefillable for $store {
             fn fuel_consumed(&self) -> Result<u64, HostError> {
                 self.fuel_consumed().ok_or_else(|| {
-                    HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled))
+                    HostError::from(&ErrorKind::Fuel(FuelError::FuelMeteringDisabled))
                 })
             }
 
             fn fuel_total(&self) -> Result<u64, HostError> {
                 self.fuel_total().ok_or_else(|| {
-                    HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled))
+                    HostError::from(&ErrorKind::Fuel(FuelError::FuelMeteringDisabled))
                 })
             }
 
             fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
                 self.add_fuel(fuel)
-                    .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))
+                    .map_err(|fe| HostError::from(&ErrorKind::Fuel(fe)))
             }
 
             fn reset_fuel(&mut self) -> Result<(), HostError> {
                 self.reset_fuel()
-                    .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))
+                    .map_err(|fe| HostError::from(&ErrorKind::Fuel(fe)))
             }
         }
     };

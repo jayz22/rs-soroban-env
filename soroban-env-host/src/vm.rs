@@ -228,7 +228,7 @@ impl Vm {
         )?;
 
         let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
+        // let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
 
         // Turn off most optional wasm features, leaving on some
         // post-MVP features commonly enabled by Rust and Clang.
@@ -239,8 +239,8 @@ impl Vm {
             .wasm_sign_extension(true)
             .floats(false)
             .consume_fuel(true)
-            .fuel_consumption_mode(FuelConsumptionMode::Eager)
-            .set_fuel_costs(fuel_costs);
+            .fuel_consumption_mode(FuelConsumptionMode::Eager);
+            // .set_fuel_costs(fuel_costs);
 
         let engine = Engine::new(&config);
         let module = {
@@ -263,7 +263,7 @@ impl Vm {
                 host.map_err(
                     linker
                         .define(hf.mod_str, hf.fn_str, func)
-                        .map_err(|le| wasmi::Error::Linker(le)),
+                        .map_err(|le| wasmi::Error::from(le)),
                 )?;
             }
         }
@@ -276,7 +276,7 @@ impl Vm {
         let instance = host.map_err(
             not_started_instance
                 .ensure_no_start(&mut store)
-                .map_err(|ie| wasmi::Error::Instantiation(ie)),
+                .map_err(|ie| wasmi::Error::from(ie)),
         )?;
 
         let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
@@ -386,44 +386,30 @@ impl Vm {
 
         if let Err(e) = res {
             use std::borrow::Cow;
-
-            // When a call fails with a wasmi::Error::Trap that carries a HostError
-            // we propagate that HostError as is, rather than producing something new.
-
-            match e {
-                wasmi::Error::Trap(trap) => {
-                    if let Some(code) = trap.trap_code() {
-                        let err = code.into();
-                        let mut msg = Cow::Borrowed("VM call trapped");
-                        host.with_debug_mode(|| {
-                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
-                            Ok(())
-                        });
-                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
-                    }
-                    if let Some(he) = trap.downcast::<HostError>() {
-                        host.log_diagnostics(
-                            "VM call trapped with HostError",
-                            &[func_sym.to_val(), he.error.to_val()],
-                        );
-                        return Err(he);
-                    }
-                    return Err(host.err(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::InternalError,
-                        "VM trapped but propagation failed",
-                        &[],
-                    ));
-                }
-                e => {
-                    let mut msg = Cow::Borrowed("VM call failed");
-                    host.with_debug_mode(|| {
-                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
-                        Ok(())
-                    });
-                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
-                }
+            
+            if let Some(code) = e.as_trap_code() {
+                let mut msg = Cow::Borrowed("VM call trapped");
+                host.with_debug_mode(|| {
+                    msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
+                    Ok(())
+                });
+                return Err(host.error(code.into(), &msg, &[func_sym.to_val()]));                
             }
+
+            if let Some(he) = e.downcast_ref::<HostError>() {
+                host.log_diagnostics(
+                    "VM call trapped with HostError",
+                    &[func_sym.to_val(), he.error.to_val()],
+                );
+                return Err(he.clone());
+            }
+
+            let mut msg = Cow::Borrowed("VM call failed");
+            host.with_debug_mode(|| {
+                msg = Cow::Owned(format!("VM call failed: {:?}", &e));
+                Ok(())
+            });
+            return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));            
         }
         host.relative_to_absolute(
             Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,

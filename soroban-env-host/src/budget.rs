@@ -820,14 +820,14 @@ impl Budget {
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
-    pub(crate) fn wasmi_fuel_costs(&self) -> Result<wasmi::FuelCosts, HostError> {
-        let config = &self.0.try_borrow_or_err()?.fuel_config;
-        let mut costs = wasmi::FuelCosts::default();
-        costs.base = config.base;
-        costs.entity = config.entity;
-        costs.load = config.load;
-        costs.store = config.store;
-        costs.call = config.call;
-        Ok(costs)
-    }
+//     pub(crate) fn wasmi_fuel_costs(&self) -> Result<wasmi::FuelCosts, HostError> {
+//         let config = &self.0.try_borrow_or_err()?.fuel_config;
+//         let mut costs = wasmi::FuelCosts::default();
+//         costs.base = config.base;
+//         costs.entity = config.entity;
+//         costs.load = config.load;
+//         costs.store = config.store;
+//         costs.call = config.call;
+//         Ok(costs)
+//     }
 }

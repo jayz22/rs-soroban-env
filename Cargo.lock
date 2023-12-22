@@ -815,6 +815,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
+name = "multi-stash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "685a9ac4b61f4e728e1d2c6a7844609c16527aeb5e6c865915c08e619c16410f"
+
+[[package]]
 name = "nalgebra"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,9 +1460,10 @@ version = "20.0.1"
 
 [[package]]
 name = "soroban-wasmi"
-version = "0.31.1-soroban.20.0.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+version = "0.32.0-beta.1-soroban"
+source = "git+https://github.com/jayz22/wasmi?rev=86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb#86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb"
 dependencies = [
+ "multi-stash",
  "smallvec",
  "spin",
  "wasmi_arena",
@@ -1837,12 +1844,12 @@ dependencies = [
 [[package]]
 name = "wasmi_arena"
 version = "0.4.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+source = "git+https://github.com/jayz22/wasmi?rev=86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb#86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb"
 
 [[package]]
 name = "wasmi_core"
-version = "0.13.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+version = "0.15.0"
+source = "git+https://github.com/jayz22/wasmi?rev=86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb#86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb"
 dependencies = [
  "downcast-rs",
  "libm",

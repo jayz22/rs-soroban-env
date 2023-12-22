@@ -9,28 +9,25 @@ use crate::{
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
-use wasmi::{
-    core::{Trap, TrapCode::BadSignature},
-    Value,
-};
+use wasmi::Value;
 
 pub(crate) trait RelativeObjectConversion: WasmiMarshal {
-    fn absolute_to_relative(self, _host: &Host) -> Result<Self, HostError> {
+    fn absolute_to_relative(self, _host: &Host) -> Result<Self, wasmi::Error> {
         Ok(self)
     }
-    fn relative_to_absolute(self, _host: &Host) -> Result<Self, HostError> {
+    fn relative_to_absolute(self, _host: &Host) -> Result<Self, wasmi::Error> {
         Ok(self)
     }
-    fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
+    fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, wasmi::Error> {
         let val = Self::try_marshal_from_value(v).ok_or_else(|| {
-            Trap::from(HostError::from(Error::from_type_and_code(
+            wasmi::Error::host(HostError::from(Error::from_type_and_code(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
             )))
         })?;
         Ok(val.relative_to_absolute(host)?)
     }
-    fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {
+    fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, wasmi::Error> {
         let rel = self.absolute_to_relative(host)?;
         Ok(Self::marshal_from_self(rel))
     }
@@ -39,12 +36,12 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal {
 macro_rules! impl_relative_object_conversion {
     ($T:ty) => {
         impl RelativeObjectConversion for $T {
-            fn absolute_to_relative(self, host: &Host) -> Result<Self, HostError> {
-                Ok(Self::try_from(host.absolute_to_relative(self.into())?)?)
+            fn absolute_to_relative(self, host: &Host) -> Result<Self, wasmi::Error> {
+                Ok(Self::try_from(host.absolute_to_relative(self.into())?).map_err(|e| HostError::from(e))?)
             }
 
-            fn relative_to_absolute(self, host: &Host) -> Result<Self, HostError> {
-                Ok(Self::try_from(host.relative_to_absolute(self.into())?)?)
+            fn relative_to_absolute(self, host: &Host) -> Result<Self, wasmi::Error> {
+                Ok(Self::try_from(host.relative_to_absolute(self.into())?).map_err(|e| HostError::from(e))?)
             }
         }
     };
@@ -154,7 +151,7 @@ macro_rules! generate_dispatch_functions {
                 // into a set of functions.
                 $(#[$fn_attr])*
                 pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
-                    Result<(i64,), Trap>
+                    Result<(i64,), wasmi::Error>
                 {
                     let _span = tracy_span!(core::stringify!($fn_id));
 
@@ -178,7 +175,7 @@ macro_rules! generate_dispatch_functions {
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
-                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| Trap::from(he))?;
+                    FuelRefillable::return_fuel_to_host(&mut caller, &host)?;
 
                     // Charge for the host function dispatching: conversion between VM fuel and
                     // host budget, marshalling values. This does not account for the actual work
@@ -218,7 +215,9 @@ macro_rules! generate_dispatch_functions {
                             if let Value::I64(v) = val {
                                 Ok((v,))
                             } else {
-                                Err(BadSignature.into())
+                                // Err(BadSignature.into())
+                                Err(HostError::from(Error::from_type_and_code(ScErrorType::Value, ScErrorCode::UnexpectedType)))
+
                             }
                         },
                         Err(hosterr) => {
@@ -227,17 +226,16 @@ macro_rules! generate_dispatch_functions {
                                 host.error(hosterr.error,
                                            concat!("escalating error to VM trap from failed host function call: ",
                                                    stringify!($fn_id)), &[]);
-                            let trap: Trap = escalation.into();
-                            Err(trap)
+                            Err(escalation)
                         }
                     };
 
                     // This is where the Host->VM boundary is crossed.
                     // We supply the remaining host budget as fuel to the VM.
-                    let caller = vmcaller.try_mut().map_err(|e| Trap::from(HostError::from(e)))?;
-                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| Trap::from(he))?;
+                    let caller = vmcaller.try_mut().map_err(|e| HostError::from(e))?;
+                    FuelRefillable::add_fuel_to_vm(caller, &host)?;
 
-                    res
+                    Ok(res?)
                 }
             )*
         )*
