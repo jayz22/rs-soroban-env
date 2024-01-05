@@ -397,7 +397,7 @@ where
             .saturating_mul(HCM::get_insns_overhead_per_sample(&host, &sample));
 
         let mut mes = harness::<HCM, _>(&host, Some(&mut alloc_group_token), &mut runner, samples);
-        mes.cpu_insns -= samples_cpu_insns_overhead;
+        mes.cpu_insns = mes.cpu_insns.saturating_sub(samples_cpu_insns_overhead);
         // the return result contains `N_r * (f(x) + Overhead_b)` (see equation [2])
         ret.push(mes);
     }
