@@ -36,7 +36,7 @@ default-features = false
 package = "soroban-wasmi"
 version = "=0.32.0-beta.1-soroban"
 git = "https://github.com/jayz22/wasmi"
-rev = "86ec3c4c7fa20c2a99fdca6f579829cdbc6c73cb"
+rev = "de10022c3abc32c1b613ad76f04820a40ceeb917"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
