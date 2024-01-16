@@ -14,6 +14,7 @@ rust-version.workspace = true
 crate-git-revision = "=0.0.6"
 
 [dependencies]
+soroban-protocol-version = { workspace = true }
 soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "curr" ] }
 wasmi = { workspace = true, optional = true }
@@ -36,7 +37,7 @@ std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
-next = ["stellar-xdr/next", "soroban-env-macros/next"]
+next = ["stellar-xdr/next", "soroban-env-macros/next", "soroban-protocol-version/next"]
 tracy = ["dep:tracy-client"]
 
 [package.metadata.docs.rs]

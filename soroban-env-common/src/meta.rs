@@ -39,34 +39,39 @@
 // changes.
 
 pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
+pub const PRO: u32 = 10;
+use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+
+pub use soroban_protocol_version::*;
+
+soroban_env_macros::generate_env_meta_consts!(
+    ledger_protocol_version: LEDGER_PROTOCOL_VERSION,
+    pre_release_version: PRE_RELEASE_VERSION,
+);
+
+// #[test]
+// fn test_version() -> () {
+//     let _  = DUMMY + 1;
+//     ()
+// }
 
 // If the "next" feature is enabled, we're building from the "next" xdr
 // definitions branch and rust module, which contains experimental, unstable,
 // in-development definitions we aren't even close to ready to release to the
 // network. This is typically associated with a one-higher-than-released
 // protocol number for testing purposes.
-#[cfg(feature = "next")]
-soroban_env_macros::generate_env_meta_consts!(
-    ledger_protocol_version: 21,
-    pre_release_version: 1,
-);
+// #[cfg(feature = "next")]
+// soroban_env_macros::generate_env_meta_consts!(
+//     ledger_protocol_version: MY_VERSION,
+//     pre_release_version: 1,
+// );
 
 // If the "next" feature is _not_ enabled, it means we're building for a
 // nearly-current release to the network and are using the "curr" xdr branch and
 // module. This will therefore be associated with a current or nearly-current
 // network protocol number.
-#[cfg(not(feature = "next"))]
-soroban_env_macros::generate_env_meta_consts!(
-    ledger_protocol_version: 20,
-    pre_release_version: 0,
-);
-
-pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {
-    // The ledger protocol version is the high 32 bits of INTERFACE_VERSION
-    (interface_version >> 32) as u32
-}
-
-pub const fn get_pre_release_version(interface_version: u64) -> u32 {
-    // The pre-release version is the low 32 bits of INTERFACE_VERSION
-    interface_version as u32
-}
+// #[cfg(not(feature = "next"))]
+// soroban_env_macros::generate_env_meta_consts!(
+//     ledger_protocol_version: SOROBAN_PROTOCOL_VERSION,
+//     pre_release_version: 0,
+// );

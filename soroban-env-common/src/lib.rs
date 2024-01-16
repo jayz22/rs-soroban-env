@@ -52,7 +52,8 @@ pub struct Version<'a> {
 pub const VERSION: Version = Version {
     pkg: env!("CARGO_PKG_VERSION"),
     rev: env!("GIT_REVISION"),
-    interface: meta::INTERFACE_VERSION,
+    // interface: meta::INTERFACE_VERSION,
+    interface: 20,
     xdr: stellar_xdr::VERSION,
 };
 

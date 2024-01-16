@@ -1,0 +1,16 @@
+[package]
+name = "soroban-protocol-version"
+description = "Soroban contract environment protocol version and utility."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+
+[features]
+next = []
+
+[package.metadata.docs.rs]
+all-features = true
