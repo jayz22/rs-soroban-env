@@ -2,6 +2,7 @@ use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{cost_runner::*, xdr::Hash, Host, Symbol, Vm};
 use soroban_synth_wasm::{Arity, GlobalRef, ModEmitter, Operand};
+use wasm_encoder::{ConstExpr, ExportKind, RefType, ValType};
 
 // These are fp numbers to minimize rounding during overhead calculation.
 // The fact they both turned out to be "whole" numbers is pure luck.
@@ -25,6 +26,72 @@ pub fn wasm_module_with_n_internal_funcs(n: usize) -> Vec<u8> {
     fe.finish_and_export("test").finish()
 }
 
+pub fn wasm_module_with_n_big_internal_funcs(n_funcs: usize, func_sz: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    for _ in 0..n_funcs {
+        let mut fe = me.func(Arity(1), 0);
+        let arg = fe.args[0];
+        fe.push(Operand::Const64(1));
+        for i in 0..func_sz {
+            fe.push(arg.0);
+            fe.push(Operand::Const64(i as i64));
+            fe.i64_mul();
+            fe.i64_add();
+        }
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        (me, _) = fe.finish();
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_globals(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    for i in 0..n {
+        me.global(ValType::I64, true, &ConstExpr::i64_const(i as i64));
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_imports(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    for i in 0..n {
+        me.import_func("t", format!("_{i}").as_str(), Arity(0));
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_exports(n: usize) -> Vec<u8> {
+    let me = ModEmitter::default();
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, fid) = fe.finish();
+    for i in 0..n {
+        me.export(format!("_{i}").as_str(), ExportKind::Func, fid.0);
+    }
+    me.finish()
+}
+
+pub fn wasm_module_with_n_table_entries(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    // There's a max of 100 tables, so we make that as a worst-case scenario.
+    for _ in 0..99 {
+        me.table(RefType::FUNCREF, 1, None);
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, f) = fe.finish();
+    let funcs = vec![f; n];
+    me.define_elem_funcs(&funcs);
+    me.finish()
+}
+
 pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     let mut fe = ModEmitter::default().func(Arity(1), 0);
     let arg = fe.args[0];
@@ -38,6 +105,156 @@ pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     fe.drop();
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_types(mut n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    // There's a max of 1,000,000 types, so we just make a loop
+    // that covers more than that many combinations, and break when we've got
+    // to the requested number.
+    let val_types = &[ValType::I32, ValType::I64];
+
+    'top: for a in val_types {
+        for b in val_types {
+            for c in val_types {
+                for d in val_types {
+                    for e in val_types {
+                        for f in val_types {
+                            for g in val_types {
+                                for h in val_types {
+                                    for i in val_types {
+                                        for j in val_types {
+                                            for aa in val_types {
+                                                for bb in val_types {
+                                                    for cc in val_types {
+                                                        for dd in val_types {
+                                                            for ee in val_types {
+                                                                for ff in val_types {
+                                                                    for gg in val_types {
+                                                                        for hh in val_types {
+                                                                            for ii in val_types {
+                                                                                for jj in val_types
+                                                                                {
+                                                                                    if n == 0 {
+                                                                                        break 'top;
+                                                                                    }
+                                                                                    n -= 1;
+                                                                                    let params = &[
+                                                                                        *a, *b, *c,
+                                                                                        *d, *e, *f,
+                                                                                        *g, *h, *i,
+                                                                                        *j, *aa,
+                                                                                        *bb, *cc,
+                                                                                        *dd, *ee,
+                                                                                        *ff, *gg,
+                                                                                        *hh, *ii,
+                                                                                        *jj,
+                                                                                    ];
+                                                                                    me.add_raw_fn_type(params, &[]);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+fn wasm_module_with_n_element_segments(n: usize) -> Vec<u8> {
+    let me = ModEmitter::default();
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, f) = fe.finish();
+    for _ in 0..n {
+        me.define_elem_funcs(&[f]);
+    }
+    me.finish()
+}
+
+fn wasm_module_with_n_data_segments(n: usize) -> Vec<u8> {
+    let me = ModEmitter::default();
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, _) = fe.finish();
+    for _ in 0..n {
+        me.define_data_segment(n as u32 * 1024, vec![1, 2, 3, 4]);
+    }
+    me.finish()
+}
+
+// This is an experiment-switching point that changes what the scale
+// factor means in the wasm module we're generating based on an environment
+// variable, so that we can examine the effects on different stages in
+// the cost model of different things we can change (and measure).
+
+// We want to cover at least all the cost types that have implementation
+// limits described in the wasmparser crate's limits module:
+//
+// pub const MAX_WASM_TYPES: usize = 1_000_000;
+// pub const MAX_WASM_SUPERTYPES: usize = 1;
+// pub const MAX_WASM_FUNCTIONS: usize = 1_000_000;
+// pub const MAX_WASM_EXPORTS: usize = 100_000;
+// pub const MAX_WASM_GLOBALS: usize = 1_000_000;
+// pub const MAX_WASM_ELEMENT_SEGMENTS: usize = 100_000;
+// pub const MAX_WASM_DATA_SEGMENTS: usize = 100_000;
+// pub const MAX_WASM_MEMORY32_PAGES: u64 = 65536;
+// pub const MAX_WASM_MEMORY64_PAGES: u64 = 1 << 48;
+// pub const MAX_WASM_STRING_SIZE: usize = 100_000;
+// pub const MAX_WASM_FUNCTION_SIZE: usize = 128 * 1024;
+// pub const MAX_WASM_FUNCTION_LOCALS: usize = 50000;
+// pub const MAX_WASM_FUNCTION_PARAMS: usize = 1000;
+// pub const MAX_WASM_FUNCTION_RETURNS: usize = 1000;
+// pub const _MAX_WASM_TABLE_SIZE: usize = 10_000_000;
+// pub const MAX_WASM_TABLE_ENTRIES: usize = 10_000_000;
+// pub const MAX_WASM_TABLES: usize = 100;
+// pub const MAX_WASM_MEMORIES: usize = 100;
+// pub const MAX_WASM_TAGS: usize = 1_000_000;
+// pub const MAX_WASM_BR_TABLE_SIZE: usize = MAX_WASM_FUNCTION_SIZE;
+// pub const MAX_WASM_STRUCT_FIELDS: usize = 10_000;
+//
+
+pub fn wasm_module_with_scale_factor(input: u64) -> Vec<u8> {
+    let n = input as usize;
+    let ty = std::env::var("WASM_SCALE_FACTOR").unwrap_or("insns".to_string());
+    match ty.as_str() {
+        "insns" => wasm_module_with_4n_insns(n),
+        "funcs" => wasm_module_with_n_internal_funcs(n),
+        "medfuncs" => wasm_module_with_n_big_internal_funcs(n, 50),
+        "bigfuncs" => wasm_module_with_n_big_internal_funcs(n, 1000),
+        "globals" => wasm_module_with_n_globals(n),
+        "imports" => wasm_module_with_n_imports(n),
+        "exports" => wasm_module_with_n_exports(n),
+        "tableentries" => wasm_module_with_n_table_entries(n),
+        "types" => wasm_module_with_n_types(n),
+        "elementsegments" => wasm_module_with_n_element_segments(n),
+        "datasegments" => wasm_module_with_n_data_segments(n),
+        _ => panic!("Unknown WASM_SCALE_FACTOR: {}", ty),
+    }
+}
+
+pub fn wasm_module_input_size_for_scale_factor(input: u64) -> u64 {
+    let ty = std::env::var("WASM_SCALE_FACTOR").unwrap_or("insns".to_string());
+    match ty.as_str() {
+        "insns" => 1 + (input * 1000),
+        "types" => 1 + (input * 1000),
+        _ => 1 + (input * 30),
+    }
 }
 
 fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {

@@ -240,10 +240,10 @@ impl Vm {
             .floats(false)
             .consume_fuel(true)
             .fuel_consumption_mode(FuelConsumptionMode::Eager);
-            // .set_fuel_costs(fuel_costs);
+        // .set_fuel_costs(fuel_costs);
 
         let engine = Engine::new(&config);
-        let module = {
+        let module: Module = {
             let _span0 = tracy_span!("parse module");
             host.map_err(Module::new(&engine, module_wasm_code))?
         };
@@ -386,14 +386,14 @@ impl Vm {
 
         if let Err(e) = res {
             use std::borrow::Cow;
-            
+
             if let Some(code) = e.as_trap_code() {
                 let mut msg = Cow::Borrowed("VM call trapped");
                 host.with_debug_mode(|| {
                     msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
                     Ok(())
                 });
-                return Err(host.error(code.into(), &msg, &[func_sym.to_val()]));                
+                return Err(host.error(code.into(), &msg, &[func_sym.to_val()]));
             }
 
             if let Some(he) = e.downcast_ref::<HostError>() {
@@ -409,7 +409,7 @@ impl Vm {
                 msg = Cow::Owned(format!("VM call failed: {:?}", &e));
                 Ok(())
             });
-            return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));            
+            return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
         }
         host.relative_to_absolute(
             Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,

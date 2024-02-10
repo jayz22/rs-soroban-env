@@ -26,11 +26,11 @@ pub trait CostRunner: Sized {
     /// around unused value, making the bench deviate from the real case.
     type RecycledType;
 
-    /// Run an baseline iterations, to get an estimation of the benchmark overhead
+    /// Run a baseline iterations, to get an estimation of the benchmark overhead
     /// (`Overhead_b` in eq.[2], see [`HostCostMeasurement`]).
     fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType;
 
-    /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
+    /// Run an iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
     /// Execution under `run_iter` is what's actually being measured by the bench
     /// machineary. Need to ensure as much as possible `run_iter` only calls essential
     /// host routines that go into the measurement. Any input setup needs to be done
@@ -70,7 +70,7 @@ pub trait CostRunner: Sized {
     /// if overridden, there is a risk of the computed input being diverged from the
     /// actual input from the host's perspective. So use it carefully. This should be
     /// after the `run`, outside of the CPU-and-memory tracking machineary.
-    fn get_tracker(host: &Host) -> CostTracker {
+    fn get_tracker(host: &Host, _samples: &Vec<Self::RecycledType>) -> CostTracker {
         match Self::COST_TYPE {
             CostType::Contract(ct) => host.as_budget().get_tracker(ct).unwrap(),
             CostType::Experimental(_) => {

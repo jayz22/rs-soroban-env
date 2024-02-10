@@ -306,8 +306,11 @@ pub trait HostCostMeasurement: Sized {
         <Self::Runner as CostRunner>::run(host, samples, recycled_samples)
     }
 
-    fn get_tracker(host: &Host) -> CostTracker {
-        <Self::Runner as CostRunner>::get_tracker(host)
+    fn get_tracker(
+        host: &Host,
+        samples: &Vec<<Self::Runner as CostRunner>::RecycledType>,
+    ) -> CostTracker {
+        <Self::Runner as CostRunner>::get_tracker(host, samples)
     }
 
     // This is kind of a hack to account for the additional cpu_insn overhead
@@ -351,7 +354,7 @@ where
 
     // Note: the `iterations` here is not same as `RUN_ITERATIONS`. This is the `N` part of the
     // cost model, which is `RUN_ITERATIONS` * "model iterations from the sample"
-    let ct = HCM::get_tracker(&host);
+    let ct = HCM::get_tracker(&host, &recycled_samples);
     Measurement {
         iterations: ct.iterations,
         inputs: ct.inputs,

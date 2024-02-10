@@ -1,5 +1,7 @@
 #[allow(unused)]
-use super::wasm_insn_exec::{wasm_module_with_4n_insns, wasm_module_with_n_internal_funcs};
+use super::wasm_insn_exec::{
+    wasm_module_input_size_for_scale_factor, wasm_module_with_scale_factor,
+};
 use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, Rng};
 use soroban_env_host::{
@@ -24,15 +26,10 @@ impl HostCostMeasurement for VmInstantiationMeasure {
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        // generate a test wasm contract with many trivial internal functions,
         // which represents the worst case in terms of work needed for WASM parsing.
-        let n = (Self::INPUT_BASE_SIZE + input * 30) as usize;
-        let wasm = wasm_module_with_n_internal_funcs(n);
-        // replace the above two lines with these below to test with wasm contracts
-        // with a single function of many instructions. In both tests the cpu grows
-        // linearly with the contract size however the slopes are very different.
-        // let n = (input * 50) as usize;
-        // let wasm = wasm_module_with_4n_insns(n);
+        // generate a test wasm contract with many trivial internal functions,
+        let input = wasm_module_input_size_for_scale_factor(input);
+        let wasm = wasm_module_with_scale_factor(input);
         VmInstantiationSample { id: Some(id), wasm }
     }
 

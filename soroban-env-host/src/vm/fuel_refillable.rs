@@ -4,7 +4,10 @@ use crate::{
     Host, HostError,
 };
 
-use wasmi::{errors::{ErrorKind, FuelError}, Caller, Store};
+use wasmi::{
+    errors::{ErrorKind, FuelError},
+    Caller, Store,
+};
 
 pub(crate) trait FuelRefillable {
     fn fuel_consumed(&self) -> Result<u64, HostError>;

@@ -56,6 +56,10 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
+    call_bench::<B, VmMemReadMeasure>(&mut params)?;
+    call_bench::<B, VmMemWriteMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmModuleMeasure>(&mut params)?;
+    call_bench::<B, VmCachedInstantiationMeasure>(&mut params)?;
     Ok(params)
 }
 

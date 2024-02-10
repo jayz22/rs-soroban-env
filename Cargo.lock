@@ -1461,7 +1461,6 @@ version = "20.0.1"
 [[package]]
 name = "soroban-wasmi"
 version = "0.32.0-beta.1-soroban"
-source = "git+https://github.com/jayz22/wasmi?rev=de10022c3abc32c1b613ad76f04820a40ceeb917#de10022c3abc32c1b613ad76f04820a40ceeb917"
 dependencies = [
  "multi-stash",
  "smallvec",
@@ -1844,12 +1843,10 @@ dependencies = [
 [[package]]
 name = "wasmi_arena"
 version = "0.4.0"
-source = "git+https://github.com/jayz22/wasmi?rev=de10022c3abc32c1b613ad76f04820a40ceeb917#de10022c3abc32c1b613ad76f04820a40ceeb917"
 
 [[package]]
 name = "wasmi_core"
 version = "0.15.0"
-source = "git+https://github.com/jayz22/wasmi?rev=de10022c3abc32c1b613ad76f04820a40ceeb917#de10022c3abc32c1b613ad76f04820a40ceeb917"
 dependencies = [
  "downcast-rs",
  "libm",

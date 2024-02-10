@@ -1,8 +1,10 @@
 mod ed25519_scalar_mut;
 mod read_xdr;
+mod vm_ops;
 
 pub use ed25519_scalar_mut::*;
 pub use read_xdr::*;
+pub use vm_ops::*;
 
 use crate::xdr::Name;
 use core::fmt;
@@ -11,6 +13,10 @@ use core::fmt;
 pub enum ExperimentalCostType {
     EdwardsPointCurve25519ScalarMul,
     ReadXdrByteArray,
+    VmMemRead,
+    VmMemWrite,
+    ParseWasmModule,
+    VmCachedInstantiation,
 }
 
 impl Name for ExperimentalCostType {
@@ -20,6 +26,10 @@ impl Name for ExperimentalCostType {
                 "EdwardsPointCurve25519ScalarMul"
             }
             ExperimentalCostType::ReadXdrByteArray => "ReadXdrByteArray",
+            ExperimentalCostType::VmMemRead => "VmMemRead",
+            ExperimentalCostType::VmMemWrite => "VmMemWrite",
+            ExperimentalCostType::ParseWasmModule => "ParseWasmModule",
+            ExperimentalCostType::VmCachedInstantiation => "VmCachedInstantiation",
         }
     }
 }

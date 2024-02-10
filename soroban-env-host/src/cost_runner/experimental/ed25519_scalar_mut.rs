@@ -35,7 +35,7 @@ impl CostRunner for Ed25519ScalarMulRun {
         black_box(sample)
     }
 
-    fn get_tracker(_host: &crate::Host) -> CostTracker {
+    fn get_tracker(_host: &crate::Host, _samples: &Vec<Ed25519ScalarMulSample>) -> CostTracker {
         CostTracker {
             iterations: Self::RUN_ITERATIONS,
             inputs: None,

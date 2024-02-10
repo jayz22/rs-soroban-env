@@ -7,6 +7,7 @@ use wasmi::{errors, ResourceLimiter};
 /// relative costs of different wasm instruction types and are for wasmi internal
 /// fuel metering use only. Units are in "fuels".
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) struct FuelConfig {
     /// The base fuel costs for all instructions.
     pub base: u64,

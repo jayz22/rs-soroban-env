@@ -37,11 +37,13 @@ macro_rules! impl_relative_object_conversion {
     ($T:ty) => {
         impl RelativeObjectConversion for $T {
             fn absolute_to_relative(self, host: &Host) -> Result<Self, wasmi::Error> {
-                Ok(Self::try_from(host.absolute_to_relative(self.into())?).map_err(|e| HostError::from(e))?)
+                Ok(Self::try_from(host.absolute_to_relative(self.into())?)
+                    .map_err(|e| HostError::from(e))?)
             }
 
             fn relative_to_absolute(self, host: &Host) -> Result<Self, wasmi::Error> {
-                Ok(Self::try_from(host.relative_to_absolute(self.into())?).map_err(|e| HostError::from(e))?)
+                Ok(Self::try_from(host.relative_to_absolute(self.into())?)
+                    .map_err(|e| HostError::from(e))?)
             }
         }
     };
