@@ -2716,7 +2716,22 @@ impl VmCallerEnv for Host {
         let sig = self.secp256k1_signature_from_bytesobj_input(signature)?;
         let rid = self.secp256k1_recovery_id_from_u32val(recovery_id)?;
         let hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
-        self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
+        let rk = self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)?;
+        self.add_host_object(rk)
+    }
+
+    fn verify_sig_ecdsa_secp256r1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg_digest: BytesObject,
+        signature: BytesObject,
+    ) -> Result<Void, HostError> {
+        let pk = self.ecdsa_p256_public_key_from_bytesobj_input(public_key)?;
+        let sig = self.ecdsa_signature_from_bytesobj_input::<p256::NistP256>(signature)?;
+        let msg_hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
+        let res = self.ecdsa_p256_verify_signature(&pk, &msg_hash, &sig)?;
+        Ok(res.into())
     }
 
     // endregion: "crypto" module functions

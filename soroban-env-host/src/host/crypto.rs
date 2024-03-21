@@ -5,10 +5,15 @@ use crate::{
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
     BytesObject, Error, Host, HostError, U32Val, Val,
 };
+use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
+use elliptic_curve::{scalar::IsHigh, CurveArithmetic};
+use generic_array::ArrayLength;
 use hex_literal::hex;
 use hmac::{Hmac, Mac};
+use p256::NistP256;
 use rand::RngCore;
 use rand_chacha::ChaCha20Rng;
+use sec1::point::Tag;
 use sha2::Sha256;
 use sha3::Keccak256;
 
@@ -74,6 +79,146 @@ impl Host {
                 "failed ED25519 verification",
                 &[],
             )
+        })
+    }
+
+    #[cfg(feature = "bench")]
+    pub(crate) fn ecdsa_p256_recover_key(
+        &self,
+        msg_hash: &Hash,
+        sig: &Signature<NistP256>,
+        rid: ecdsa::RecoveryId,
+    ) -> Result<ScBytes, HostError> {
+        let _span = tracy_span!("secp256r1 recover");
+        // TODO: charge the right model to budget
+        // self.charge_budget(ContractCostType::RecoverEcdsaSecp256k1Key, None)?;
+
+        let recovered_key =
+            p256::ecdsa::VerifyingKey::recover_from_prehash(msg_hash.as_slice(), &sig, rid)
+                .map_err(|_| {
+                    self.err(
+                        ScErrorType::Crypto,
+                        ScErrorCode::InvalidInput,
+                        "ECDSA-secp256k1 signature recovery failed",
+                        &[],
+                    )
+                })?;
+        Ok(ScBytes::from(crate::xdr::BytesM::try_from(
+            recovered_key
+                .to_encoded_point(/*compress:*/ false)
+                .as_bytes(),
+        )?))
+    }
+
+    pub(crate) fn ecdsa_p256_verify_signature(
+        &self,
+        verifying_key: &p256::ecdsa::VerifyingKey,
+        msg_hash: &Hash,
+        sig: &Signature<NistP256>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("p256 verify");
+        // TODO: charge budget
+        verifying_key
+            .verify_prehash(msg_hash.as_slice(), sig)
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "failed scep256r1 verification",
+                    &[],
+                )
+            })
+    }
+
+    pub(crate) fn ecdsa_p256_pub_key_from_sec1_bytes(
+        &self,
+        bytes: &[u8],
+    ) -> Result<p256::ecdsa::VerifyingKey, HostError> {
+        let tag = bytes
+            .first()
+            .cloned()
+            .ok_or(sec1::Error::PointEncoding)
+            .and_then(Tag::from_u8)
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid ECDSA public key",
+                    &[],
+                )
+            })?;
+        if tag != Tag::Uncompressed {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA public key",
+                &[],
+            ));
+        }
+
+        // TODO add a cost type. This is not just a memcpy, it also must perform some point arithmatic
+        p256::ecdsa::VerifyingKey::from_sec1_bytes(bytes).map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA public key",
+                &[],
+            )
+        })
+    }
+
+    pub(crate) fn ecdsa_p256_public_key_from_bytesobj_input(
+        &self,
+        k: BytesObject,
+    ) -> Result<p256::ecdsa::VerifyingKey, HostError> {
+        self.visit_obj(k, |bytes: &ScBytes| {
+            self.ecdsa_p256_pub_key_from_sec1_bytes(bytes.as_slice())
+        })
+    }
+
+    // ECDSA functions
+    pub(crate) fn ecdsa_signature_from_bytes<C>(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Signature<C>, HostError>
+    where
+        C: PrimeCurve + CurveArithmetic,
+        SignatureSize<C>: ArrayLength<u8>,
+    {
+        // TODO: rename this cost to DecodeEcdsaSig.
+        // We use the same cost model between p-256 and k-256 for signature decoding.
+        // The general process of decoding is quite similar: split bytes into (r, s) components, checking they are in valid ranges.
+        self.charge_budget(ContractCostType::ComputeEcdsaSecp256k1Sig, None)?;
+        let sig = Signature::<C>::try_from(bytes).map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA sinature",
+                &[],
+            )
+        })?;
+        if sig.s().is_high().into() {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "ECDSA signature 's' part is not normalized to low form",
+                &[],
+            ))
+        } else {
+            Ok(sig)
+        }
+    }
+
+    pub(crate) fn ecdsa_signature_from_bytesobj_input<C>(
+        &self,
+        k: BytesObject,
+    ) -> Result<Signature<C>, HostError>
+    where
+        C: PrimeCurve + CurveArithmetic,
+        SignatureSize<C>: ArrayLength<u8>,
+    {
+        self.visit_obj(k, |bytes: &ScBytes| {
+            self.ecdsa_signature_from_bytes(bytes.as_slice())
         })
     }
 
@@ -145,7 +290,7 @@ impl Host {
         hash: &Hash,
         sig: &k256::ecdsa::Signature,
         rid: k256::ecdsa::RecoveryId,
-    ) -> Result<BytesObject, HostError> {
+    ) -> Result<ScBytes, HostError> {
         let _span = tracy_span!("secp256k1 recover");
         self.charge_budget(ContractCostType::RecoverEcdsaSecp256k1Key, None)?;
         let recovered_key =
@@ -159,12 +304,11 @@ impl Host {
                     )
                 },
             )?;
-        let rk = ScBytes::from(crate::xdr::BytesM::try_from(
+        Ok(ScBytes::from(crate::xdr::BytesM::try_from(
             recovered_key
                 .to_encoded_point(/*compress:*/ false)
                 .as_bytes(),
-        )?);
-        self.add_host_object(rk)
+        )?))
     }
 
     // SHA256 functions

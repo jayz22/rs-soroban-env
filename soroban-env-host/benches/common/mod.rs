@@ -56,6 +56,12 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
+    call_bench::<B, EcdsaSecp256r1VerifyMeasure>(&mut params)?;
+    call_bench::<B, EcdsaSecp256r1RecoverMeasure>(&mut params)?;
+    call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
+    call_bench::<B, Sec1DecodePointUncompressedMeasure>(&mut params)?;
+    call_bench::<B, DecodeSecp256r1SignatureMeasure>(&mut params)?;
+    call_bench::<B, DecodeSecp256k1SignatureMeasure>(&mut params)?;
     Ok(params)
 }
 
