@@ -2919,7 +2919,7 @@ impl VmCallerEnv for Host {
         Ok(res.into())
     }
 
-    fn bls_g1_add(
+    fn bls12_381_g1_add(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
@@ -2949,7 +2949,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_g1_mul(
+    fn bls12_381_g1_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         scalar: BytesObject,
@@ -2980,7 +2980,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_g1_multiexp(
+    fn bls12_381_g1_multiexp(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         scalars: BytesObject,
@@ -3011,7 +3011,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_map_to_g1(
+    fn bls12_381_map_to_g1(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
@@ -3024,7 +3024,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_hash_to_g1(
+    fn bls12_381_hash_to_g1(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
@@ -3037,7 +3037,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_g2_add(
+    fn bls12_381_g2_add(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
@@ -3067,7 +3067,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_g2_mul(
+    fn bls12_381_g2_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         scalar: BytesObject,
@@ -3098,7 +3098,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_g2_multiexp(
+    fn bls12_381_g2_multiexp(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         scalars: BytesObject,
@@ -3129,7 +3129,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_map_to_g2(
+    fn bls12_381_map_to_g2(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
@@ -3142,7 +3142,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_hash_to_g2(
+    fn bls12_381_hash_to_g2(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
@@ -3155,7 +3155,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
-    fn bls_pairing(
+    fn bls12_381_pairing(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p1: BytesObject,

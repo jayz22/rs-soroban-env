@@ -301,6 +301,20 @@ impl Host {
             Ok(hash)
         })
     }
+
+    pub(crate) fn bls12_381_g1_from_bytesobj(
+        &self,
+        bytes: BytesObject,
+    ) -> Result</* G1 point */ (), HostError> {
+        todo!()
+    }
+
+    pub(crate) fn bls12_381_g2_from_bytesobj(
+        &self,
+        bytes: BytesObject,
+    ) -> Result</* G2 point */ (), HostError> {
+        todo!()
+    }
 }
 
 pub(crate) fn sha256_hash_from_bytes_raw(
