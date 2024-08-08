@@ -1,5 +1,8 @@
 use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
-use std::rc::Rc;
+use std::{
+    ops::{Add, Mul},
+    rc::Rc,
+};
 
 use crate::{
     auth::AuthorizationManager,
@@ -62,7 +65,7 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
-use soroban_env_common::SymbolSmall;
+use soroban_env_common::{Env, SymbolSmall};
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
@@ -2925,116 +2928,61 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g1_add_raw_internal(&p0_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.bls12_381_g1_uncompressed_from_bytesobj(p0)?;
+        let p1 = self.bls12_381_g1_uncompressed_from_bytesobj(p1)?;
+        let res = p0.add(p1);
+        self.bls12_381_g1_serialize_uncompressed(res)
     }
 
     fn bls12_381_g1_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalar: BytesObject,
-        p1: BytesObject,
+        p0: BytesObject,
+        scalar: U256Object,
     ) -> Result<BytesObject, HostError> {
-        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
-            let scalar_array: Result<[u8; BLS_SCALAR_SIZE], _> = bytes.as_slice().try_into();
-            scalar_array.map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G1 multiplication",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g1_mul_raw_internal(&scalar_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.bls12_381_g1_uncompressed_from_bytesobj(p0)?;
+        let scalar = self.bls12_381_scalar_from_u256obj(scalar)?;
+        let res = p0.mul(scalar);
+        self.bls12_381_g1_serialize_uncompressed(res)
     }
 
-    fn bls12_381_g1_multiexp(
+    fn bls12_381_g1_msm(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalars: BytesObject,
-        pn: BytesObject,
+        vp: VecObject,
+        vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let scalars_bytes: Vec<u8> = self
-            .visit_obj(scalars, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
-            .map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G1 multi exponentiation",
-                    &[],
-                )
-            })?;
-
-        let pn_bytes: Vec<u8> = self
-            .visit_obj(pn, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
-            .map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "point out of range for G1 multi exponentiation",
-                    &[],
-                )
-            })?;
-        let result = self.bls_g1_multiexp_raw_internal(&scalars_bytes, &pn_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let res = self.bls12_381_g1_msm_from_vecobj(vp, vs)?;
+        self.bls12_381_g1_serialize_uncompressed(res)
     }
 
-    fn bls12_381_map_to_g1(
+    fn bls12_381_map_fp_to_g1(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        msg: BytesObject,
+        fp: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
-            .visit_obj(msg, |bytes: &ScBytes| {
-                Ok(bytes.as_slice().try_into().unwrap())
-            })?;
-        let result = self.bls_map_to_g1_internal(&msg_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let fp = self.bls12_381_fp_from_bytesobj(fp)?;
+        let g1 = self.bls12_381_map_fp_to_g1_internal(fp)?;
+        // TODO: serialize g1 affine directly
+        self.bls12_381_g1_serialize_uncompressed(g1)
     }
 
     fn bls12_381_hash_to_g1(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        msg: BytesObject,
+        mo: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
-            .visit_obj(msg, |bytes: &ScBytes| {
-                Ok(bytes.as_slice().try_into().unwrap())
-            })?;
-        let result = self.bls_hash_to_g1_internal(&msg_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let g1 = self.visit_obj(mo, |msg: &ScBytes| {
+            self.bls12_381_hash_to_g1_internal(msg.as_slice())
+        })?;
+        // TODO: serialize affine
+        self.bls12_381_g1_serialize_uncompressed(g1)
+        // let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
+        //     .visit_obj(msg, |bytes: &ScBytes| {
+        //         Ok(bytes.as_slice().try_into().unwrap())
+        //     })?;
+        // let result = self.bls_hash_to_g1_internal(&msg_bytes)?;
+        // self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
     fn bls12_381_g2_add(
@@ -3043,103 +2991,40 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g2_add_raw_internal(&p0_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.bls12_381_g2_uncompressed_from_bytesobj(p0)?;
+        let p1 = self.bls12_381_g2_uncompressed_from_bytesobj(p1)?;
+        let res = p0.add(p1);
+        self.bls12_381_g2_serialize_uncompressed(res)
     }
 
     fn bls12_381_g2_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalar: BytesObject,
-        p1: BytesObject,
+        p0: BytesObject,
+        scalar: U256Object,
     ) -> Result<BytesObject, HostError> {
-        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
-            let scalar_array: Result<[u8; BLS_SCALAR_SIZE], _> = bytes.as_slice().try_into();
-            scalar_array.map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G2 multiplication",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g2_mul_raw_internal(&scalar_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.bls12_381_g2_uncompressed_from_bytesobj(p0)?;
+        let scalar = self.bls12_381_scalar_from_u256obj(scalar)?;
+        let res = p0.mul(scalar);
+        self.bls12_381_g2_serialize_uncompressed(res)
     }
 
-    fn bls12_381_g2_multiexp(
+    fn bls12_381_g2_msm(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalars: BytesObject,
-        pn: BytesObject,
+        vp: VecObject,
+        vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let scalars_bytes: Vec<u8> = self
-            .visit_obj(scalars, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
-            .map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G2 multi exponentiation",
-                    &[],
-                )
-            })?;
-
-        let pn_bytes: Vec<u8> = self
-            .visit_obj(pn, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
-            .map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "point out of range for G2 multi exponentiation",
-                    &[],
-                )
-            })?;
-        let result = self.bls_g2_multiexp_raw_internal(&scalars_bytes, &pn_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let res = self.bls12_381_g2_msm_from_vecobj(vp, vs)?;
+        self.bls12_381_g2_serialize_uncompressed(res)
     }
 
-    fn bls12_381_map_to_g2(
+    fn bls12_381_map_fp2_to_g2(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        msg: BytesObject,
+        fp2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let msg_bytes: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self
-            .visit_obj(msg, |bytes: &ScBytes| {
-                Ok(bytes.as_slice().try_into().unwrap())
-            })?;
-        let result = self.bls_map_to_g2_internal(&msg_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        todo!()
     }
 
     fn bls12_381_hash_to_g2(
@@ -3147,12 +3032,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let msg_bytes: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self
-            .visit_obj(msg, |bytes: &ScBytes| {
-                Ok(bytes.as_slice().try_into().unwrap())
-            })?;
-        let result = self.bls_hash_to_g2_internal(&msg_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        todo!()
     }
 
     fn bls12_381_pairing(
@@ -3161,15 +3041,10 @@ impl VmCallerEnv for Host {
         p1: BytesObject,
         p2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p1: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self.visit_obj(p1, |bytes: &ScBytes| {
-            Ok(bytes.as_slice().try_into().unwrap())
-        })?;
-
-        let p2: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self.visit_obj(p2, |bytes: &ScBytes| {
-            Ok(bytes.as_slice().try_into().unwrap())
-        })?;
-        let result = self.bls_pairing_internal(&p1, &p2)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let g1 = self.bls12_381_g1_uncompressed_from_bytesobj(p1)?;
+        let g2 = self.bls12_381_g2_uncompressed_from_bytesobj(p2)?;
+        let po = self.bls12_381_pairing_internal(g1, g2)?;
+        self.bls12_381_fp12_serialize(po.0)
     }
 
     // endregion: "crypto" module functions
