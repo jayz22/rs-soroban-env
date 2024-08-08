@@ -1,5 +1,4 @@
 use super::{
-    crypto::{chacha20_fill_bytes, unbias_prng_seed},
     declared_size::DeclaredSizeForMetering,
     metered_clone::MeteredContainer,
 };
@@ -8,6 +7,7 @@ use crate::{
     host::metered_clone::MeteredClone,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
+    crypto::{chacha20_fill_bytes, unbias_prng_seed},
     HostError,
 };
 use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, RngCore};

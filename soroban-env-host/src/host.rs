@@ -25,10 +25,8 @@ use crate::{
     VmCaller, VmCallerEnv, Void,
 };
 
-pub(crate) mod bls;
 mod comparison;
 mod conversion;
-pub(crate) mod crypto;
 mod data_helper;
 mod declared_size;
 pub(crate) mod error;
@@ -42,7 +40,7 @@ pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
-mod prng;
+pub(crate) mod prng;
 pub(crate) mod trace;
 mod validity;
 

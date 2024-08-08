@@ -16,8 +16,8 @@ use crate::{
     budget::{AsBudget, Budget},
     events::Events,
     fees::LedgerEntryRentChange,
+    crypto::sha256_hash_from_bytes,
     host::{
-        crypto::sha256_hash_from_bytes,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
         TraceHook,

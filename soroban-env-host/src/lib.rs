@@ -28,7 +28,7 @@ pub mod events;
 pub use events::diagnostic::DiagnosticLevel;
 mod host;
 pub(crate) mod host_object;
-
+pub(crate) mod crypto;
 mod builtin_contracts;
 
 pub mod auth;

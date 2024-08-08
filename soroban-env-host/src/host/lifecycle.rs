@@ -12,7 +12,7 @@ use crate::{
         ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint, Hash, LedgerKey,
         LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Val,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, crypto, Val,
 };
 use std::rc::Rc;
 
@@ -309,7 +309,6 @@ impl Host {
     }
 }
 
-use super::crypto;
 use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
 use super::ContractFunctionSet;
