@@ -2926,10 +2926,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bls12_381_g1_uncompressed_from_bytesobj(p0)?;
-        let p1 = self.bls12_381_g1_uncompressed_from_bytesobj(p1)?;
+        let p0 = self.g1_affine_deserialize_uncompressed_from_bytesobj(p0)?;
+        let p1 = self.g1_affine_deserialize_uncompressed_from_bytesobj(p1)?;
         let res = p0.add(p1);
-        self.bls12_381_g1_serialize_uncompressed(res)
+        self.g1_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g1_mul(
@@ -2938,10 +2938,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar: U256Object,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bls12_381_g1_uncompressed_from_bytesobj(p0)?;
-        let scalar = self.bls12_381_scalar_from_u256obj(scalar)?;
+        let p0 = self.g1_affine_deserialize_uncompressed_from_bytesobj(p0)?;
+        let scalar = self.scalar_from_u256obj(scalar)?;
         let res = p0.mul(scalar);
-        self.bls12_381_g1_serialize_uncompressed(res)
+        self.g1_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g1_msm(
@@ -2950,8 +2950,8 @@ impl VmCallerEnv for Host {
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let res = self.bls12_381_g1_msm_from_vecobj(vp, vs)?;
-        self.bls12_381_g1_serialize_uncompressed(res)
+        let res = self.g1_msm_from_vecobj(vp, vs)?;
+        self.g1_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_map_fp_to_g1(
@@ -2959,10 +2959,9 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         fp: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let fp = self.bls12_381_fp_from_bytesobj(fp)?;
-        let g1 = self.bls12_381_map_fp_to_g1_internal(fp)?;
-        // TODO: serialize g1 affine directly
-        self.bls12_381_g1_serialize_uncompressed(g1)
+        let fp = self.fp_from_bytesobj(fp)?;
+        let g1 = self.map_fp_to_g1_internal(fp)?;
+        self.g1_affine_serialize_uncompressed(g1)
     }
 
     fn bls12_381_hash_to_g1(
@@ -2970,17 +2969,8 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         mo: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let g1 = self.visit_obj(mo, |msg: &ScBytes| {
-            self.bls12_381_hash_to_g1_internal(msg.as_slice())
-        })?;
-        // TODO: serialize affine
-        self.bls12_381_g1_serialize_uncompressed(g1)
-        // let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
-        //     .visit_obj(msg, |bytes: &ScBytes| {
-        //         Ok(bytes.as_slice().try_into().unwrap())
-        //     })?;
-        // let result = self.bls_hash_to_g1_internal(&msg_bytes)?;
-        // self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let g1 = self.visit_obj(mo, |msg: &ScBytes| self.hash_to_g1_internal(msg.as_slice()))?;
+        self.g1_affine_serialize_uncompressed(g1)
     }
 
     fn bls12_381_g2_add(
@@ -2989,10 +2979,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bls12_381_g2_uncompressed_from_bytesobj(p0)?;
-        let p1 = self.bls12_381_g2_uncompressed_from_bytesobj(p1)?;
+        let p0 = self.g2_affine_deserialize_uncompressed_from_bytesobj(p0)?;
+        let p1 = self.g2_affine_deserialize_uncompressed_from_bytesobj(p1)?;
         let res = p0.add(p1);
-        self.bls12_381_g2_serialize_uncompressed(res)
+        self.g2_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g2_mul(
@@ -3001,10 +2991,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar: U256Object,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bls12_381_g2_uncompressed_from_bytesobj(p0)?;
-        let scalar = self.bls12_381_scalar_from_u256obj(scalar)?;
+        let p0 = self.g2_affine_deserialize_uncompressed_from_bytesobj(p0)?;
+        let scalar = self.scalar_from_u256obj(scalar)?;
         let res = p0.mul(scalar);
-        self.bls12_381_g2_serialize_uncompressed(res)
+        self.g2_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g2_msm(
@@ -3013,8 +3003,8 @@ impl VmCallerEnv for Host {
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let res = self.bls12_381_g2_msm_from_vecobj(vp, vs)?;
-        self.bls12_381_g2_serialize_uncompressed(res)
+        let res = self.g2_msm_from_vecobj(vp, vs)?;
+        self.g2_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_map_fp2_to_g2(
@@ -3022,7 +3012,9 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         fp2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        todo!()
+        let fp2 = self.fp2_from_bytesobj(fp2)?;
+        let g2 = self.map_fp2_to_g2_internal(fp2)?;
+        self.g2_affine_serialize_uncompressed(g2)
     }
 
     fn bls12_381_hash_to_g2(
@@ -3030,7 +3022,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        todo!()
+        let g2 = self.visit_obj(msg, |msg: &ScBytes| {
+            self.hash_to_g2_internal(msg.as_slice())
+        })?;
+        self.g2_affine_serialize_uncompressed(g2)
     }
 
     fn bls12_381_pairing(
@@ -3039,10 +3034,10 @@ impl VmCallerEnv for Host {
         p1: BytesObject,
         p2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let g1 = self.bls12_381_g1_uncompressed_from_bytesobj(p1)?;
-        let g2 = self.bls12_381_g2_uncompressed_from_bytesobj(p2)?;
-        let po = self.bls12_381_pairing_internal(g1, g2)?;
-        self.bls12_381_fp12_serialize(po.0)
+        let g1 = self.g1_affine_deserialize_uncompressed_from_bytesobj(p1)?;
+        let g2 = self.g2_affine_deserialize_uncompressed_from_bytesobj(p2)?;
+        let po = self.pairing_internal(g1, g2)?;
+        self.fp12_serialize(po.0)
     }
 
     // endregion: "crypto" module functions

@@ -1,12 +1,10 @@
 use crate::host::metered_clone::MeteredContainer;
 use crate::host::prng::SEED_BYTES;
-use crate::host_object::{HostVec, MemHostObjectType};
 use crate::{
     budget::AsBudget,
     err,
-    num::U256,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Error, Host, HostError, U256Object, U32Val, Val, Env, TryFromVal, VecObject
+    BytesObject, Error, Host, HostError, U32Val, Val,
 };
 use elliptic_curve::scalar::IsHigh;
 use hex_literal::hex;
@@ -19,7 +17,7 @@ use sha3::Keccak256;
 use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
 use elliptic_curve::CurveArithmetic;
 use generic_array::ArrayLength;
-pub(crate) mod bls;
+pub(crate) mod bls12_381;
 
 impl Host {
     // Ed25519 functions

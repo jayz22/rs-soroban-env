@@ -10,13 +10,10 @@ use crate::{
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::short_weierstrass::Projective;
+use ark_ec::CurveGroup;
 use sha2::Sha256;
 
-
-use ark_bls12_381::{
-    util::{G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE},
-    Bls12_381, Fr, G1Affine,
-};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine};
 use ark_ec::{
     hashing::{
         curve_maps::wb::WBMap,
@@ -29,97 +26,160 @@ use ark_ec::{
 use ark_ff::{
     field_hashers::{DefaultFieldHasher, HashToField},
     fields::Field,
-    One, UniformRand, Zero,
+    One, PrimeField, UniformRand, Zero,
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use soroban_env_common::{Env, TryFromVal, VecObject};
 
-// Domain Separation Tags specified according to https://datatracker.ietf.org/doc/rfc9380/, see sections 3.1, 8.8
-const fn dst(order: u8) -> &'static str {
-    match order {
-        1 => "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_",
-        2 => "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_",
-        _ => "unsupported",
-    }
-}
+const G1_SERIALIZED_SIZE: usize = 48;
+const G2_SERIALIZED_SIZE: usize = 96;
+// Domain Separation Tags specified according to https://datatracker.ietf.org/doc/rfc9380/
+// section 3.1, 8.8
+const G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
+const G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
 
 impl Host {
-    pub(crate) fn bls12_381_g1_uncompressed_from_bytesobj(
+    fn deserialize_from_bytesobj<T: CanonicalDeserialize>(
         &self,
         bo: BytesObject,
-    ) -> Result<G1Affine, HostError> {
-        self.visit_obj(bo, |g1: &ScBytes| {
-            if g1.len() != 2 * G1_SERIALIZED_SIZE {
+        expected_size: usize,
+        msg: &str,
+    ) -> Result<T, HostError> {
+        // TODO: metering charge for canonical deserialize with size
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if bytes.len() != expected_size {
                 return Err(self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "invalid length of an uncompressed bls12-381 G1Affine point",
-                    &[Val::from_u32(g1.len() as u32).into()],
+                    format!("bls12-381 {msg}: invalid input length to deserialize").as_str(),
+                    &[
+                        Val::from_u32(bytes.len() as u32).into(),
+                        Val::from_u32(expected_size as u32).into(),
+                    ],
                 ));
             }
-            G1Affine::deserialize_uncompressed(g1.as_byte_slice()).map_err(|_e| {
+            T::deserialize_uncompressed(bytes.as_slice()).map_err(|e| {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "unable to deserialize g1",
-                    &[bo.to_val()],
+                    "bls12-381: unable to deserialize",
+                    &[],
                 )
             })
         })
     }
 
-    pub(crate) fn bls12_381_g1_serialize_uncompressed(
+    pub(crate) fn serialize_into_bytesobj<T: CanonicalSerialize>(
         &self,
-        g1: G1Projective,
+        element: T,
+        expected_size: usize,
+        msg: &str,
     ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; 2 * G1_SERIALIZED_SIZE];
-        g1.serialize_uncompressed(buf.as_mut_slice())
+        // TODO: metering charge canonical serializeation
+        let mut buf = vec![0; expected_size];
+        element
+            .serialize_uncompressed(buf.as_mut_slice())
             .map_err(|_e| {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InternalError,
-                    "unable to serialize g1",
+                    format!("bls12-381: unable to serialize {msg}").as_str(),
                     &[],
                 )
             })?;
         self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
-    pub(crate) fn bls12_381_scalar_from_u256obj(&self, so: U256Object) -> Result<Fr, HostError> {
+    pub(crate) fn g1_affine_deserialize_uncompressed_from_bytesobj(
+        &self,
+        bo: BytesObject,
+    ) -> Result<G1Affine, HostError> {
+        self.deserialize_from_bytesobj(bo, 2 * G1_SERIALIZED_SIZE, "G1 affine")
+    }
+
+    pub(crate) fn g1_projective_into_affine(
+        &self,
+        g1: G1Projective,
+    ) -> Result<G1Affine, HostError> {
+        // TODO: metering charge g1projectiveintoaffine
+        Ok(g1.into_affine())
+    }
+
+    pub(crate) fn g1_affine_serialize_uncompressed(
+        &self,
+        g1: G1Affine,
+    ) -> Result<BytesObject, HostError> {
+        self.serialize_into_bytesobj(g1, 2 * G1_SERIALIZED_SIZE, "G1 affine")
+    }
+
+    pub(crate) fn g1_projective_serialize_uncompressed(
+        &self,
+        g1: G1Projective,
+    ) -> Result<BytesObject, HostError> {
+        let g1_affine = self.g1_projective_into_affine(g1)?;
+        self.g1_affine_serialize_uncompressed(g1_affine)
+    }
+
+    pub(crate) fn g2_affine_deserialize_uncompressed_from_bytesobj(
+        &self,
+        bo: BytesObject,
+    ) -> Result<G2Affine, HostError> {
+        self.deserialize_from_bytesobj(bo, 2 * G2_SERIALIZED_SIZE, "G2 affine")
+    }
+
+    pub(crate) fn g2_projective_into_affine(
+        &self,
+        g2: G2Projective,
+    ) -> Result<G2Affine, HostError> {
+        // TODO: metering charge g2projectiveintoaffine
+        Ok(g2.into_affine())
+    }
+
+    pub(crate) fn g2_affine_serialize_uncompressed(
+        &self,
+        g2: G2Affine,
+    ) -> Result<BytesObject, HostError> {
+        self.serialize_into_bytesobj(g2, 2 * G2_SERIALIZED_SIZE, "G2 affine")
+    }
+
+    pub(crate) fn g2_projective_serialize_uncompressed(
+        &self,
+        g2: G2Projective,
+    ) -> Result<BytesObject, HostError> {
+        let g2_affine = self.g2_projective_into_affine(g2)?;
+        self.g2_affine_serialize_uncompressed(g2_affine)
+    }
+
+    pub(crate) fn scalar_from_u256obj(&self, so: U256Object) -> Result<Fr, HostError> {
+        // TODO: metering
         self.visit_obj(so, |scalar: &U256| {
             Ok(Fr::from_le_bytes_mod_order(&scalar.to_le_bytes()))
         })
     }
 
-    pub(crate) fn bls12_381_fp_from_bytesobj(&self, fp: BytesObject) -> Result<Fq, HostError> {
-        self.visit_obj(fp, |fp: &ScBytes| {
-            if fp.len() != G1_SERIALIZED_SIZE {
-                return Err(self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length of a bls12-381 field element",
-                    &[Val::from_u32(fp.len() as u32).into()],
-                ));
-            }
-            Fq::deserialize_uncompressed(fp.as_slice()).map_err(|e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "unable to deserialize bls12-381 field element",
-                    &[],
-                )
-            })
-        })
+    pub(crate) fn fp_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
+        self.deserialize_from_bytesobj(bo, G1_SERIALIZED_SIZE, "field element (Fp)")
     }
 
-    fn bls12_381_g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
+    pub(crate) fn fp2_from_bytesobj(&self, bo: BytesObject) -> Result<Fq2, HostError> {
+        self.deserialize_from_bytesobj(bo, G2_SERIALIZED_SIZE, "extention field element (Fp2)")
+    }
+
+    pub(crate) fn fp12_serialize(&self, fp12: Fq12) -> Result<BytesObject, HostError> {
+        // TODO: verifty fp12 is always 576 bytes long
+        self.serialize_into_bytesobj(fp12, 12 * G1_SERIALIZED_SIZE, "fp12")
+    }
+
+    fn g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
         let mut points: Vec<G1Affine> = vec![];
+        // TODO: metering charge for memalloc
         points.reserve(len as usize);
-        self.visit_obj(vp, |vp: &HostVec| {
+        let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self
-                    .bls12_381_g1_uncompressed_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
+                let pp = self.g1_affine_deserialize_uncompressed_from_bytesobj(
+                    BytesObject::try_from_val(self, p)?,
+                )?;
                 points.push(pp);
             }
             Ok(())
@@ -127,13 +187,14 @@ impl Host {
         Ok(points)
     }
 
-    fn bls12_381_scalar_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
+    fn scalar_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
         let len: u32 = self.vec_len(vs)?.into();
         let mut scalars: Vec<Fr> = vec![];
+        // TODO: metering charge for memalloc
         scalars.reserve(len as usize);
-        self.visit_obj(vs, |vs: &HostVec| {
+        let _ = self.visit_obj(vs, |vs: &HostVec| {
             for s in vs.iter() {
-                let ss = self.bls12_381_scalar_from_u256obj(U256Object::try_from_val(self, s)?)?;
+                let ss = self.scalar_from_u256obj(U256Object::try_from_val(self, s)?)?;
                 scalars.push(ss);
             }
             Ok(())
@@ -141,11 +202,12 @@ impl Host {
         Ok(scalars)
     }
 
-    pub(crate) fn bls12_381_g1_msm_from_vecobj(
+    pub(crate) fn g1_msm_from_vecobj(
         &self,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<G1Projective, HostError> {
+        // TODO: metering charge for msm, which can possibly be analytically composed of O(len) of scalar multiplication plus point addition
         let p_len = self.vec_len(vp)?;
         let s_len = self.vec_len(vs)?;
         if u32::from(p_len) != u32::from(s_len) {
@@ -156,15 +218,14 @@ impl Host {
                 &[p_len.to_val(), s_len.to_val()],
             ));
         }
-        let points = self.bls12_381_g1_vec_from_vecobj(vp)?;
-        let scalars = self.bls12_381_scalar_vec_from_vecobj(vs)?;
+        let points = self.g1_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
         let res = G1Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
         Ok(res)
     }
 
-    pub(crate) fn bls12_381_map_fp_to_g1_internal(&self, fp: Fq) -> Result<G1Affine, HostError> {
-        let dst = dst(1).as_bytes();
-        debug_assert!(dst.len() <= 255, "Domain separator exceeds length limit");
+    pub(crate) fn map_fp_to_g1_internal(&self, fp: Fq) -> Result<G1Affine, HostError> {
+        // TODO: metering
         let mapper = WBMap::<g1::Config>::new().map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -183,14 +244,13 @@ impl Host {
         })
     }
 
-    pub(crate) fn bls12_381_hash_to_g1_internal(&self, msg: &[u8]) -> Result<G1Affine, HostError> {
-        let dst = dst(1).as_bytes();
-        debug_assert!(dst.len() <= 255, "Domain separator exceeds length limit");
+    pub(crate) fn hash_to_g1_internal(&self, msg: &[u8]) -> Result<G1Affine, HostError> {
+        // TODO: metering
         let g1_mapper = MapToCurveBasedHasher::<
             Projective<g1::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g1::Config>,
-        >::new(dst)
+        >::new(G1_DST.as_bytes())
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -209,55 +269,16 @@ impl Host {
         })
     }
 
-    pub(crate) fn bls12_381_g2_uncompressed_from_bytesobj(
-        &self,
-        bo: BytesObject,
-    ) -> Result<G2Affine, HostError> {
-        self.visit_obj(bo, |g2: &ScBytes| {
-            if g2.len() != 2 * G2_SERIALIZED_SIZE {
-                return Err(self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length of an uncompressed bls12-381 G2Affine point",
-                    &[Val::from_u32(g2.len() as u32).into()],
-                ));
-            }
-            G2Affine::deserialize_uncompressed(g2.as_byte_slice()).map_err(|_e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "unable to deserialize g2",
-                    &[bo.to_val()],
-                )
-            })
-        })
-    }
-
-    pub(crate) fn bls12_381_g2_serialize_uncompressed(
-        &self,
-        g2: G2Projective,
-    ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; 2 * G2_SERIALIZED_SIZE];
-        g2.serialize_uncompressed(buf.as_mut_slice())
-            .map_err(|_e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InternalError,
-                    "unable to serialize g2",
-                    &[],
-                )
-            })?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
-    }
-
-    fn bls12_381_g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
+    fn g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
+        // TODO: metering charge memalloc
         let mut points: Vec<G2Affine> = vec![];
         points.reserve(len as usize);
-        self.visit_obj(vp, |vp: &HostVec| {
+        let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self
-                    .bls12_381_g2_uncompressed_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
+                let pp = self.g2_affine_deserialize_uncompressed_from_bytesobj(
+                    BytesObject::try_from_val(self, p)?,
+                )?;
                 points.push(pp);
             }
             Ok(())
@@ -265,11 +286,12 @@ impl Host {
         Ok(points)
     }
 
-    pub(crate) fn bls12_381_g2_msm_from_vecobj(
+    pub(crate) fn g2_msm_from_vecobj(
         &self,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<G2Projective, HostError> {
+        // TODO: metering msm
         let p_len = self.vec_len(vp)?;
         let s_len = self.vec_len(vs)?;
         if u32::from(p_len) != u32::from(s_len) {
@@ -280,15 +302,13 @@ impl Host {
                 &[p_len.to_val(), s_len.to_val()],
             ));
         }
-        let points = self.bls12_381_g2_vec_from_vecobj(vp)?;
-        let scalars = self.bls12_381_scalar_vec_from_vecobj(vs)?;
+        let points = self.g2_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
         let res = G2Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
         Ok(res)
     }
 
-    pub(crate) fn bls12_381_map_fp2_to_g2_internal(&self, fp: Fq2) -> Result<G2Affine, HostError> {
-        let dst = dst(2).as_bytes();
-        debug_assert!(dst.len() <= 255, "Domain separator exceeds length limit");
+    pub(crate) fn map_fp2_to_g2_internal(&self, fp: Fq2) -> Result<G2Affine, HostError> {
         let mapper = WBMap::<g2::Config>::new().map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -307,14 +327,12 @@ impl Host {
         })
     }
 
-    pub(crate) fn bls12_381_hash_to_g2_internal(&self, msg: &[u8]) -> Result<G2Affine, HostError> {
-        let dst = dst(2).as_bytes();
-        debug_assert!(dst.len() <= 255, "Domain separator exceeds length limit");
+    pub(crate) fn hash_to_g2_internal(&self, msg: &[u8]) -> Result<G2Affine, HostError> {
         let mapper = MapToCurveBasedHasher::<
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g2::Config>,
-        >::new(dst)
+        >::new(G2_DST.as_bytes())
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -333,12 +351,14 @@ impl Host {
         })
     }
 
-    pub(crate) fn bls12_381_pairing_internal(
+    pub(crate) fn pairing_internal(
         &self,
         p1: G1Affine,
         p2: G2Affine,
     ) -> Result<PairingOutput<Bls12_381>, HostError> {
+        // TODO: metering
         let mlo = Bls12_381::multi_miller_loop([p1], [p2]);
+        // TODO: metering
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
@@ -347,20 +367,5 @@ impl Host {
                 &[],
             )
         })
-    }
-
-    pub(crate) fn bls12_381_fp12_serialize(&self, fp12: Fq12) -> Result<BytesObject, HostError> {
-        // TODO: I believe fp12 is always 576 bytes long, we can use a static buffer here.
-        let mut buf = vec![];
-        fp12.serialize_uncompressed(buf.as_mut_slice())
-            .map_err(|_e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InternalError,
-                    "unable to serialize fp12",
-                    &[],
-                )
-            })?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 }

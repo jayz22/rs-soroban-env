@@ -1,7 +1,7 @@
 use soroban_env_common::TryIntoVal;
 
 use crate::{
-    err,
+    crypto, err,
     host::{
         metered_clone::{MeteredAlloc, MeteredClone},
         metered_write_xdr, ContractReentryMode,
@@ -12,7 +12,7 @@ use crate::{
         ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint, Hash, LedgerKey,
         LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, crypto, Val,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Val,
 };
 use std::rc::Rc;
 
