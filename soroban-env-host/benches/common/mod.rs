@@ -53,13 +53,14 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
 ) -> std::io::Result<BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>> {
     let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> =
         BTreeMap::new();
-    call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
-    call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
-    call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
-    call_bench::<B, EcdsaSecp256k1VerifyMeasure>(&mut params)?;
-    call_bench::<B, EcdsaSecp256r1RecoverMeasure>(&mut params)?;
-    call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
-    call_bench::<B, DecodeSecp256r1SigMeasure>(&mut params)?;
+    // call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
+    // call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
+    // call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
+    // call_bench::<B, EcdsaSecp256k1VerifyMeasure>(&mut params)?;
+    // call_bench::<B, EcdsaSecp256r1RecoverMeasure>(&mut params)?;
+    // call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
+    // call_bench::<B, DecodeSecp256r1SigMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1AddMeasure>(&mut params)?;
     Ok(params)
 }
 

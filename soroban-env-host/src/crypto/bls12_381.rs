@@ -1,3 +1,7 @@
+use std::{
+    ops::{Add, Mul},
+    rc::Rc,
+};
 use crate::host::metered_clone::MeteredContainer;
 use crate::host_object::{HostVec, MemHostObjectType};
 use crate::{
@@ -9,7 +13,7 @@ use crate::{
 };
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
-use ark_ec::short_weierstrass::Projective;
+use ark_ec::short_weierstrass::{Affine, Projective};
 use ark_ec::CurveGroup;
 use sha2::Sha256;
 
@@ -45,7 +49,6 @@ impl Host {
         expected_size: usize,
         msg: &str,
     ) -> Result<T, HostError> {
-        // TODO: metering charge for canonical deserialize with size
         self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
@@ -58,7 +61,10 @@ impl Host {
                     ],
                 ));
             }
-            T::deserialize_uncompressed(bytes.as_slice()).map_err(|e| {
+
+            // TODO: metering charge for canonical deserialize with size
+            self.charge_budget(ContractCostType::Sec1DecodePointUncompressed, None)?;
+            T::deserialize_with_mode(bytes.as_slice(), Compress::No, Validate::Yes).map_err(|_e| {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
@@ -76,7 +82,8 @@ impl Host {
         msg: &str,
     ) -> Result<BytesObject, HostError> {
         // TODO: metering charge canonical serializeation
-        let mut buf = vec![0; expected_size];
+        self.charge_budget(ContractCostType::ValSer, Some(expected_size as u64))?;
+        let mut buf = vec![0; expected_size];        
         element
             .serialize_uncompressed(buf.as_mut_slice())
             .map_err(|_e| {
@@ -90,7 +97,7 @@ impl Host {
         self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
-    pub(crate) fn g1_affine_deserialize_uncompressed_from_bytesobj(
+    pub(crate) fn g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
     ) -> Result<G1Affine, HostError> {
@@ -120,7 +127,7 @@ impl Host {
         self.g1_affine_serialize_uncompressed(g1_affine)
     }
 
-    pub(crate) fn g2_affine_deserialize_uncompressed_from_bytesobj(
+    pub(crate) fn g2_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
     ) -> Result<G2Affine, HostError> {
@@ -153,6 +160,14 @@ impl Host {
     pub(crate) fn scalar_from_u256obj(&self, so: U256Object) -> Result<Fr, HostError> {
         // TODO: metering
         self.visit_obj(so, |scalar: &U256| {
+            // the implementation of this function is in arc_ff prime.rs trait PrimeField. 
+            // it performs some extra check if bytes is larger than the field size, which 
+            // is not applicable to us. 
+            // so the actual logic is just serializing a bytes array into a
+            // Fp256<MontBackend<FrConfig, 4>>, which wraps a BigInt<4>. 
+            // TODO: here we've assumed the input contains the exactly field element we want
+            // should we instead provide from_random_bytes_with_flags? (ark_ff/fp/mod.rs)
+            self.charge_budget(ContractCostType::ValDeser, Some(32))?;
             Ok(Fr::from_le_bytes_mod_order(&scalar.to_le_bytes()))
         })
     }
@@ -177,7 +192,7 @@ impl Host {
         points.reserve(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.g1_affine_deserialize_uncompressed_from_bytesobj(
+                let pp = self.g1_affine_deserialize_from_bytesobj(
                     BytesObject::try_from_val(self, p)?,
                 )?;
                 points.push(pp);
@@ -202,6 +217,16 @@ impl Host {
         Ok(scalars)
     }
 
+    pub(crate) fn g1_add_internal(&self, p0: G1Affine, p1: G1Affine) -> Result<G1Projective, HostError> {
+        // TODO: metering
+        Ok(p0.add(p1))
+    }
+
+    pub(crate) fn g1_mul_internal(&self, p0: G1Affine, scalar: Fr) -> Result<G1Projective, HostError> {
+        // TODO: metering
+        Ok(p0.mul(scalar))
+    }
+
     pub(crate) fn g1_msm_from_vecobj(
         &self,
         vp: VecObject,
@@ -220,6 +245,9 @@ impl Host {
         }
         let points = self.g1_vec_from_vecobj(vp)?;
         let scalars = self.scalar_vec_from_vecobj(vs)?;
+        // TODO: metering. The actual logic happens inside msm_bigint_wnaf (ark_ec/variable_base/mod.rs)
+        // under branch negation is cheap.
+        // the unchecked version just skips the length equal check
         let res = G1Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
         Ok(res)
     }
@@ -276,7 +304,7 @@ impl Host {
         points.reserve(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.g2_affine_deserialize_uncompressed_from_bytesobj(
+                let pp = self.g2_affine_deserialize_from_bytesobj(
                     BytesObject::try_from_val(self, p)?,
                 )?;
                 points.push(pp);
@@ -284,6 +312,17 @@ impl Host {
             Ok(())
         });
         Ok(points)
+    }
+
+
+    pub(crate) fn g2_add_internal(&self, p0: G2Affine, p1: G2Affine) -> Result<G2Projective, HostError> {
+        // TODO: metering
+        Ok(p0.add(p1))
+    }
+
+    pub(crate) fn g2_mul_internal(&self, p0: G2Affine, scalar: Fr) -> Result<G2Projective, HostError> {
+        // TODO: metering
+        Ok(p0.mul(scalar))
     }
 
     pub(crate) fn g2_msm_from_vecobj(
