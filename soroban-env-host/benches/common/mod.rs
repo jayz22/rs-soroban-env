@@ -61,6 +61,11 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     // call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
     // call_bench::<B, DecodeSecp256r1SigMeasure>(&mut params)?;
     call_bench::<B, Bls12381G1AddMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1MulMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1MsmMeasure>(&mut params)?;
+    call_bench::<B, Bls12381MapFpToG1Measure>(&mut params)?;
+    call_bench::<B, Bls12381HashToG1Measure>(&mut params)?;
+    call_bench::<B, Bls12381PairingMeasure>(&mut params)?;
     Ok(params)
 }
 

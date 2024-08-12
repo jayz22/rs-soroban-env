@@ -36,16 +36,18 @@ pub enum ExperimentalCostType {
     Bls12381G2ProjectiveToAffine,
     Bls12381G1Add,
     Bls12381G1Mul,
-    Bls12381G1MultiScalarMultiplication,
-    Bls12381FpToG1,
+    Bls12381G1Msm,
+    Bls12381MapFpToG1,
     Bls12381HashToG1,
     Bls12381G2Add,
     Bls12381G2Mul,
+    Bls12381G2Msm,
     Bls12381G2MultiScalarMultiplication,
-    Bls12381Fp2ToG2,
+    Bls12381MapFp2ToG2,
     Bls12381HashToG2,
     Bls12381MillerLoop,
-    Bls12381FinalExponentiation
+    Bls12381FinalExp,
+    Bls12381Pairing
 }
 
 impl Name for ExperimentalCostType {
@@ -70,16 +72,18 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381G2ProjectiveToAffine => "Bls12381G2ProjectiveToAffine",
             ExperimentalCostType::Bls12381G1Add => "Bls12381G1Add",
             ExperimentalCostType::Bls12381G1Mul => "Bls12381G1Mul",
-            ExperimentalCostType::Bls12381G1MultiScalarMultiplication => "Bls12381G1MultiScalarMultiplication",
-            ExperimentalCostType::Bls12381FpToG1 => "Bls12381FpToG1",
+            ExperimentalCostType::Bls12381G1Msm => "Bls12381G1Msm",
+            ExperimentalCostType::Bls12381MapFpToG1 => "Bls12381MapFpToG1",
             ExperimentalCostType::Bls12381HashToG1 => "Bls12381HashToG1",
             ExperimentalCostType::Bls12381G2Add => "Bls12381G2Add",
             ExperimentalCostType::Bls12381G2Mul => "Bls12381G2Mul",
+            ExperimentalCostType::Bls12381G2Msm => "Bls12381G2Msm",
             ExperimentalCostType::Bls12381G2MultiScalarMultiplication => "Bls12381G2MultiScalarMultiplication",
-            ExperimentalCostType::Bls12381Fp2ToG2 => "Bls12381Fp2ToG2",
+            ExperimentalCostType::Bls12381MapFp2ToG2 => "Bls12381MapFp2ToG2",
             ExperimentalCostType::Bls12381HashToG2 => "Bls12381HashToG2",
             ExperimentalCostType::Bls12381MillerLoop => "Bls12381MillerLoop",
-            ExperimentalCostType::Bls12381FinalExponentiation => "Bls12381FinalExponentiation",
+            ExperimentalCostType::Bls12381FinalExp => "Bls12381FinalExp",
+            ExperimentalCostType::Bls12381Pairing => "Bls12381Pairing",
         }
     }
 }

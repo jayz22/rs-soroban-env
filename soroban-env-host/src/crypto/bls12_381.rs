@@ -272,7 +272,7 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g1_internal(&self, msg: &[u8]) -> Result<G1Affine, HostError> {
+    pub(crate) fn hash_to_g1_internal<T: AsRef<[u8]>>(&self, msg: T) -> Result<G1Affine, HostError> {
         // TODO: metering
         let g1_mapper = MapToCurveBasedHasher::<
             Projective<g1::Config>,
@@ -287,7 +287,7 @@ impl Host {
                 &[],
             )
         })?;
-        g1_mapper.hash(msg).map_err(|e| {
+        g1_mapper.hash(msg.as_ref()).map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
@@ -366,7 +366,7 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g2_internal(&self, msg: &[u8]) -> Result<G2Affine, HostError> {
+    pub(crate) fn hash_to_g2_internal<T: AsRef<[u8]>>(&self, msg: T) -> Result<G2Affine, HostError> {
         let mapper = MapToCurveBasedHasher::<
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
@@ -380,7 +380,7 @@ impl Host {
                 &[],
             )
         })?;
-        mapper.hash(msg).map_err(|e| {
+        mapper.hash(msg.as_ref()).map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
