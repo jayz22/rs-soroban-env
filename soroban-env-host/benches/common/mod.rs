@@ -65,6 +65,11 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Bls12381G1MsmMeasure>(&mut params)?;
     call_bench::<B, Bls12381MapFpToG1Measure>(&mut params)?;
     call_bench::<B, Bls12381HashToG1Measure>(&mut params)?;
+    call_bench::<B, Bls12381G2AddMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2MulMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2MsmMeasure>(&mut params)?;
+    call_bench::<B, Bls12381MapFp2ToG2Measure>(&mut params)?;
+    call_bench::<B, Bls12381HashToG2Measure>(&mut params)?;
     call_bench::<B, Bls12381PairingMeasure>(&mut params)?;
     Ok(params)
 }
