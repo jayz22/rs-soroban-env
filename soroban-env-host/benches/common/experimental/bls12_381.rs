@@ -112,7 +112,7 @@ impl HostCostMeasurement for Bls12381G2MsmMeasure {
         let mut vp = host.vec_new().unwrap();
         let mut vs = host.vec_new().unwrap();
         for _i in 0..input {
-            let mut p_buf = vec![0u8; 96];
+            let mut p_buf = vec![0u8; 192];
             G2Affine::rand(rng).serialize_uncompressed(p_buf.as_mut_slice()).unwrap();
             let p_obj = host.bytes_new_from_slice(&p_buf).unwrap();
             vp = host.vec_push_back(vp, p_obj.to_val()).unwrap();
