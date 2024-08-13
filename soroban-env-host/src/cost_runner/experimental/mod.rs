@@ -1,18 +1,18 @@
+mod bls12_381;
 mod decode_secp256r1_sig;
 mod ecdsa_secp256k1_verify;
 mod ecdsa_secp256r1_recover;
 mod ed25519_scalar_mut;
 mod read_xdr;
 mod sec1_decode_point_compressed;
-mod bls12_381;
 
+pub use bls12_381::*;
 pub use decode_secp256r1_sig::*;
 pub use ecdsa_secp256k1_verify::*;
 pub use ecdsa_secp256r1_recover::*;
 pub use ed25519_scalar_mut::*;
 pub use read_xdr::*;
 pub use sec1_decode_point_compressed::*;
-pub use bls12_381::*;
 
 use crate::xdr::Name;
 use core::fmt;
@@ -47,7 +47,7 @@ pub enum ExperimentalCostType {
     Bls12381HashToG2,
     Bls12381MillerLoop,
     Bls12381FinalExp,
-    Bls12381Pairing
+    Bls12381Pairing,
 }
 
 impl Name for ExperimentalCostType {
@@ -61,12 +61,24 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Sec1DecodePointCompressed => "Sec1DecodePointCompressed",
             ExperimentalCostType::DecodeSecp256r1Signature => "DecodeSecp256r1Signature",
             ExperimentalCostType::EcdsaSecp256k1Verify => "EcdsaSecp256k1Verify",
-            ExperimentalCostType::Bls12381G1AffineDeserializeUncompressed => "Bls12381G1AffineDeserializeUncompressed",
-            ExperimentalCostType::Bls12381G1AffineSerializeUncompressed => "Bls12381G1AffineSerializeUncompressed",
-            ExperimentalCostType::Bls12381G2AffineDeserializeUncompressed => "Bls12381G2AffineDeserializeUncompressed",
-            ExperimentalCostType::Bls12381G2AffineSerializeUncompressed => "Bls12381G2AffineSerializeUncompressed",
-            ExperimentalCostType::Bls12381FpDeserializeUncompressed => "Bls12381FpDeserializeUncompressed",
-            ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => "Bls12381Fp2DeserializeUncompressed",
+            ExperimentalCostType::Bls12381G1AffineDeserializeUncompressed => {
+                "Bls12381G1AffineDeserializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G1AffineSerializeUncompressed => {
+                "Bls12381G1AffineSerializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G2AffineDeserializeUncompressed => {
+                "Bls12381G2AffineDeserializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G2AffineSerializeUncompressed => {
+                "Bls12381G2AffineSerializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381FpDeserializeUncompressed => {
+                "Bls12381FpDeserializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => {
+                "Bls12381Fp2DeserializeUncompressed"
+            }
             ExperimentalCostType::Bls12381Fp12Serialize => "Bls12381Fp12Serialize",
             ExperimentalCostType::Bls12381G1ProjectiveToAffine => "Bls12381G1ProjectiveToAffine",
             ExperimentalCostType::Bls12381G2ProjectiveToAffine => "Bls12381G2ProjectiveToAffine",
@@ -78,7 +90,9 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381G2Add => "Bls12381G2Add",
             ExperimentalCostType::Bls12381G2Mul => "Bls12381G2Mul",
             ExperimentalCostType::Bls12381G2Msm => "Bls12381G2Msm",
-            ExperimentalCostType::Bls12381G2MultiScalarMultiplication => "Bls12381G2MultiScalarMultiplication",
+            ExperimentalCostType::Bls12381G2MultiScalarMultiplication => {
+                "Bls12381G2MultiScalarMultiplication"
+            }
             ExperimentalCostType::Bls12381MapFp2ToG2 => "Bls12381MapFp2ToG2",
             ExperimentalCostType::Bls12381HashToG2 => "Bls12381HashToG2",
             ExperimentalCostType::Bls12381MillerLoop => "Bls12381MillerLoop",

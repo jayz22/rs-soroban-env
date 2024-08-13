@@ -1,7 +1,3 @@
-use std::{
-    ops::{Add, Mul},
-    rc::Rc,
-};
 use crate::host::metered_clone::MeteredContainer;
 use crate::host_object::{HostVec, MemHostObjectType};
 use crate::{
@@ -16,6 +12,10 @@ use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::short_weierstrass::{Affine, Projective};
 use ark_ec::CurveGroup;
 use sha2::Sha256;
+use std::{
+    ops::{Add, Mul},
+    rc::Rc,
+};
 
 use ark_bls12_381::{Bls12_381, Fr, G1Affine};
 use ark_ec::{
@@ -83,7 +83,7 @@ impl Host {
     ) -> Result<BytesObject, HostError> {
         // TODO: metering charge canonical serializeation
         self.charge_budget(ContractCostType::ValSer, Some(expected_size as u64))?;
-        let mut buf = vec![0; expected_size];        
+        let mut buf = vec![0; expected_size];
         element
             .serialize_uncompressed(buf.as_mut_slice())
             .map_err(|_e| {
@@ -160,11 +160,11 @@ impl Host {
     pub(crate) fn scalar_from_u256obj(&self, so: U256Object) -> Result<Fr, HostError> {
         // TODO: metering
         self.visit_obj(so, |scalar: &U256| {
-            // the implementation of this function is in arc_ff prime.rs trait PrimeField. 
-            // it performs some extra check if bytes is larger than the field size, which 
-            // is not applicable to us. 
+            // the implementation of this function is in arc_ff prime.rs trait PrimeField.
+            // it performs some extra check if bytes is larger than the field size, which
+            // is not applicable to us.
             // so the actual logic is just serializing a bytes array into a
-            // Fp256<MontBackend<FrConfig, 4>>, which wraps a BigInt<4>. 
+            // Fp256<MontBackend<FrConfig, 4>>, which wraps a BigInt<4>.
             // TODO: here we've assumed the input contains the exactly field element we want
             // should we instead provide from_random_bytes_with_flags? (ark_ff/fp/mod.rs)
             self.charge_budget(ContractCostType::ValDeser, Some(32))?;
@@ -192,9 +192,8 @@ impl Host {
         points.reserve(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.g1_affine_deserialize_from_bytesobj(
-                    BytesObject::try_from_val(self, p)?,
-                )?;
+                let pp =
+                    self.g1_affine_deserialize_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
                 points.push(pp);
             }
             Ok(())
@@ -217,12 +216,20 @@ impl Host {
         Ok(scalars)
     }
 
-    pub(crate) fn g1_add_internal(&self, p0: G1Affine, p1: G1Affine) -> Result<G1Projective, HostError> {
+    pub(crate) fn g1_add_internal(
+        &self,
+        p0: G1Affine,
+        p1: G1Affine,
+    ) -> Result<G1Projective, HostError> {
         // TODO: metering
         Ok(p0.add(p1))
     }
 
-    pub(crate) fn g1_mul_internal(&self, p0: G1Affine, scalar: Fr) -> Result<G1Projective, HostError> {
+    pub(crate) fn g1_mul_internal(
+        &self,
+        p0: G1Affine,
+        scalar: Fr,
+    ) -> Result<G1Projective, HostError> {
         // TODO: metering
         Ok(p0.mul(scalar))
     }
@@ -272,7 +279,10 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g1_internal<T: AsRef<[u8]>>(&self, msg: T) -> Result<G1Affine, HostError> {
+    pub(crate) fn hash_to_g1_internal<T: AsRef<[u8]>>(
+        &self,
+        msg: T,
+    ) -> Result<G1Affine, HostError> {
         // TODO: metering
         let g1_mapper = MapToCurveBasedHasher::<
             Projective<g1::Config>,
@@ -304,9 +314,8 @@ impl Host {
         points.reserve(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.g2_affine_deserialize_from_bytesobj(
-                    BytesObject::try_from_val(self, p)?,
-                )?;
+                let pp =
+                    self.g2_affine_deserialize_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
                 points.push(pp);
             }
             Ok(())
@@ -314,13 +323,20 @@ impl Host {
         Ok(points)
     }
 
-
-    pub(crate) fn g2_add_internal(&self, p0: G2Affine, p1: G2Affine) -> Result<G2Projective, HostError> {
+    pub(crate) fn g2_add_internal(
+        &self,
+        p0: G2Affine,
+        p1: G2Affine,
+    ) -> Result<G2Projective, HostError> {
         // TODO: metering
         Ok(p0.add(p1))
     }
 
-    pub(crate) fn g2_mul_internal(&self, p0: G2Affine, scalar: Fr) -> Result<G2Projective, HostError> {
+    pub(crate) fn g2_mul_internal(
+        &self,
+        p0: G2Affine,
+        scalar: Fr,
+    ) -> Result<G2Projective, HostError> {
         // TODO: metering
         Ok(p0.mul(scalar))
     }
@@ -366,7 +382,10 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g2_internal<T: AsRef<[u8]>>(&self, msg: T) -> Result<G2Affine, HostError> {
+    pub(crate) fn hash_to_g2_internal<T: AsRef<[u8]>>(
+        &self,
+        msg: T,
+    ) -> Result<G2Affine, HostError> {
         let mapper = MapToCurveBasedHasher::<
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
