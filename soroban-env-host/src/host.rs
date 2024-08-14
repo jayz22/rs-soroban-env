@@ -1,8 +1,5 @@
 use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
-use std::{
-    ops::{Add, Mul},
-    rc::Rc,
-};
+use std::rc::Rc;
 
 use crate::{
     auth::AuthorizationManager,
@@ -21,8 +18,8 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
-    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal, Val, VecObject,
-    VmCaller, VmCallerEnv, Void,
+    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
+    Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -63,7 +60,6 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
-use soroban_env_common::{Env, SymbolSmall};
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]

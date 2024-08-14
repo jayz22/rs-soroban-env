@@ -1,21 +1,16 @@
-use crate::host::metered_clone::MeteredContainer;
-use crate::host_object::{HostVec, MemHostObjectType};
+use crate::host_object::HostVec;
 use crate::{
     budget::AsBudget,
-    err,
     num::U256,
-    xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Error, Host, HostError, U256Object, U32Val, Val,
+    xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
+    BytesObject, Host, HostError, U256Object, Val,
 };
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
-use ark_ec::short_weierstrass::{Affine, Projective};
+use ark_ec::short_weierstrass::Projective;
 use ark_ec::CurveGroup;
 use sha2::Sha256;
-use std::{
-    ops::{Add, Mul},
-    rc::Rc,
-};
+use std::ops::{Add, Mul};
 
 use ark_bls12_381::{Bls12_381, Fr, G1Affine};
 use ark_ec::{
@@ -24,14 +19,9 @@ use ark_ec::{
         map_to_curve_hasher::{MapToCurve, MapToCurveBasedHasher},
         HashToCurve,
     },
-    pairing,
     scalar_mul::variable_base::VariableBaseMSM,
 };
-use ark_ff::{
-    field_hashers::{DefaultFieldHasher, HashToField},
-    fields::Field,
-    One, PrimeField, UniformRand, Zero,
-};
+use ark_ff::{field_hashers::DefaultFieldHasher, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use soroban_env_common::{Env, TryFromVal, VecObject};
 
@@ -41,6 +31,64 @@ const G2_SERIALIZED_SIZE: usize = 96;
 // section 3.1, 8.8
 const G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
 const G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
+
+//========================================================================
+// Some preliminary calibration results
+//========================================================================
+// | Cost Type                     |      CPU |   equivalent wasm insns  |
+// |:------------------------------|---------:|-------------------------:|
+// | Bls12381G1ProjectiveToAffine  |    88023 |                   22006  |
+// | Bls12381G1Add                 |     7281 |                    1821  |
+// | Bls12381G1Mul                 |  2277752 |                  569438  |
+// | Bls12381G1Msm                 |  7237111 |                 1809278  |
+// | Bls12381MapFpToG1             |  1510142 |                  377536  |
+// | Bls12381HashToG1              |  3192885 |                  798222  |
+// | Bls12381G2ProjectiveToAffine  |    95994 |                   24000  |
+// | Bls12381G2Add                 |    23570 |                    5893  |
+// | Bls12381G2Mul                 |  7075352 |                 1768838  |
+// | Bls12381G2Msm                 | 10681052 |                 2670263  |
+// | Bls12381MapFp2ToG2            |  2367368 |                  591842  |
+// | Bls12381HashToG2              |  6870057 |                 1717515  |
+// | Bls12381Pairing               | 14442475 |                 3610619  |
+//========================================================================
+
+enum ExperimentalCostType {
+    Bls12381G1ProjectiveToAffine,
+    Bls12381G1Add,
+    Bls12381G1Mul,
+    Bls12381G1Msm,
+    Bls12381MapFpToG1,
+    Bls12381HashToG1,
+    Bls12381G2ProjectiveToAffine,
+    Bls12381G2Add,
+    Bls12381G2Mul,
+    Bls12381G2Msm,
+    Bls12381MapFp2ToG2,
+    Bls12381HashToG2,
+    Bls12381Pairing,
+}
+
+// each wasm insn is calibrated to be 4 cpu insns
+// based on the calibration results shown above, we convert the cpu count into
+// number of equivalent wasm insns.
+// The whole point is to work without XDR definition of these new types
+fn equivalent_wasm_insns(ty: ExperimentalCostType) -> u64 {
+    match ty {
+        ExperimentalCostType::Bls12381G1ProjectiveToAffine => 22006,
+        ExperimentalCostType::Bls12381G1Add => 1821,
+        ExperimentalCostType::Bls12381G1Mul => 569438,
+        ExperimentalCostType::Bls12381G1Msm => 1809278,
+        ExperimentalCostType::Bls12381MapFpToG1 => 377536,
+        ExperimentalCostType::Bls12381HashToG1 => 798222,
+        ExperimentalCostType::Bls12381G2ProjectiveToAffine => 24000,
+        ExperimentalCostType::Bls12381G2Add => 5893,
+        ExperimentalCostType::Bls12381G2Mul => 1768838,
+        ExperimentalCostType::Bls12381G2Msm => 2670263,
+        ExperimentalCostType::Bls12381MapFp2ToG2 => 591842,
+        ExperimentalCostType::Bls12381HashToG2 => 1717515,
+        ExperimentalCostType::Bls12381Pairing => 3610619,
+    }
+}
 
 impl Host {
     fn deserialize_from_bytesobj<T: CanonicalDeserialize>(
@@ -109,6 +157,11 @@ impl Host {
         g1: G1Projective,
     ) -> Result<G1Affine, HostError> {
         // TODO: metering charge g1projectiveintoaffine
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G1ProjectiveToAffine),
+            None,
+        )?;
         Ok(g1.into_affine())
     }
 
@@ -139,6 +192,11 @@ impl Host {
         g2: G2Projective,
     ) -> Result<G2Affine, HostError> {
         // TODO: metering charge g2projectiveintoaffine
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G2ProjectiveToAffine),
+            None,
+        )?;
         Ok(g2.into_affine())
     }
 
@@ -222,6 +280,11 @@ impl Host {
         p1: G1Affine,
     ) -> Result<G1Projective, HostError> {
         // TODO: metering
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G1Add),
+            None,
+        )?;
         Ok(p0.add(p1))
     }
 
@@ -231,6 +294,11 @@ impl Host {
         scalar: Fr,
     ) -> Result<G1Projective, HostError> {
         // TODO: metering
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G1Mul),
+            None,
+        )?;
         Ok(p0.mul(scalar))
     }
 
@@ -255,12 +323,22 @@ impl Host {
         // TODO: metering. The actual logic happens inside msm_bigint_wnaf (ark_ec/variable_base/mod.rs)
         // under branch negation is cheap.
         // the unchecked version just skips the length equal check
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G1Msm),
+            None,
+        )?;
         let res = G1Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
         Ok(res)
     }
 
     pub(crate) fn map_fp_to_g1_internal(&self, fp: Fq) -> Result<G1Affine, HostError> {
-        // TODO: metering
+        // TODO: metering, we lump the cost of `new` and `map_to_curve` into a single cost
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381MapFpToG1),
+            None,
+        )?;
         let mapper = WBMap::<g1::Config>::new().map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -284,6 +362,11 @@ impl Host {
         msg: T,
     ) -> Result<G1Affine, HostError> {
         // TODO: metering
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381HashToG1),
+            None,
+        )?;
         let g1_mapper = MapToCurveBasedHasher::<
             Projective<g1::Config>,
             DefaultFieldHasher<Sha256, 128>,
@@ -329,6 +412,11 @@ impl Host {
         p1: G2Affine,
     ) -> Result<G2Projective, HostError> {
         // TODO: metering
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G2Add),
+            None,
+        )?;
         Ok(p0.add(p1))
     }
 
@@ -338,6 +426,11 @@ impl Host {
         scalar: Fr,
     ) -> Result<G2Projective, HostError> {
         // TODO: metering
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G2Mul),
+            None,
+        )?;
         Ok(p0.mul(scalar))
     }
 
@@ -359,11 +452,21 @@ impl Host {
         }
         let points = self.g2_vec_from_vecobj(vp)?;
         let scalars = self.scalar_vec_from_vecobj(vs)?;
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381G2Msm),
+            None,
+        )?;
         let res = G2Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
         Ok(res)
     }
 
     pub(crate) fn map_fp2_to_g2_internal(&self, fp: Fq2) -> Result<G2Affine, HostError> {
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381MapFp2ToG2),
+            None,
+        )?;
         let mapper = WBMap::<g2::Config>::new().map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -386,6 +489,11 @@ impl Host {
         &self,
         msg: T,
     ) -> Result<G2Affine, HostError> {
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381HashToG2),
+            None,
+        )?;
         let mapper = MapToCurveBasedHasher::<
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
@@ -414,9 +522,13 @@ impl Host {
         p1: G1Affine,
         p2: G2Affine,
     ) -> Result<PairingOutput<Bls12_381>, HostError> {
-        // TODO: metering
+        // TODO: metering. we lump these two steps into one cost type
+        self.as_budget().bulk_charge(
+            ContractCostType::WasmInsnExec,
+            equivalent_wasm_insns(ExperimentalCostType::Bls12381Pairing),
+            None,
+        )?;
         let mlo = Bls12_381::multi_miller_loop([p1], [p2]);
-        // TODO: metering
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
