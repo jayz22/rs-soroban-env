@@ -1,9 +1,8 @@
 use crate::host_object::HostVec;
 use crate::{
     budget::AsBudget,
-    num::U256,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError, U256Object, Val,
+    BytesObject, Host, HostError, Val,
 };
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -215,9 +214,9 @@ impl Host {
         self.g2_affine_serialize_uncompressed(g2_affine)
     }
 
-    pub(crate) fn scalar_from_u256obj(&self, so: U256Object) -> Result<Fr, HostError> {
+    pub(crate) fn scalar_from_le_bytesobj(&self, so: BytesObject) -> Result<Fr, HostError> {
         // TODO: metering
-        self.visit_obj(so, |scalar: &U256| {
+        self.visit_obj(so, |scalar: &ScBytes| {
             // the implementation of this function is in arc_ff prime.rs trait PrimeField.
             // it performs some extra check if bytes is larger than the field size, which
             // is not applicable to us.
@@ -226,7 +225,7 @@ impl Host {
             // TODO: here we've assumed the input contains the exactly field element we want
             // should we instead provide from_random_bytes_with_flags? (ark_ff/fp/mod.rs)
             self.charge_budget(ContractCostType::ValDeser, Some(32))?;
-            Ok(Fr::from_le_bytes_mod_order(&scalar.to_le_bytes()))
+            Ok(Fr::from_le_bytes_mod_order(scalar.as_slice()))
         })
     }
 
@@ -266,7 +265,7 @@ impl Host {
         scalars.reserve(len as usize);
         let _ = self.visit_obj(vs, |vs: &HostVec| {
             for s in vs.iter() {
-                let ss = self.scalar_from_u256obj(U256Object::try_from_val(self, s)?)?;
+                let ss = self.scalar_from_le_bytesobj(BytesObject::try_from_val(self, s)?)?;
                 scalars.push(ss);
             }
             Ok(())
