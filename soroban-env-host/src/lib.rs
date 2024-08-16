@@ -28,6 +28,7 @@ pub mod events;
 pub use events::diagnostic::DiagnosticLevel;
 mod builtin_contracts;
 pub(crate) mod crypto;
+pub use crypto::bls12_381::{BLS12381_G1_DST, BLS12381_G2_DST};
 mod host;
 pub(crate) mod host_object;
 

@@ -28,8 +28,8 @@ const G1_SERIALIZED_SIZE: usize = 48;
 const G2_SERIALIZED_SIZE: usize = 96;
 // Domain Separation Tags specified according to https://datatracker.ietf.org/doc/rfc9380/
 // section 3.1, 8.8
-const G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
-const G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
+pub const BLS12381_G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
+pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
 
 //========================================================================
 // Some preliminary calibration results
@@ -370,7 +370,7 @@ impl Host {
             Projective<g1::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g1::Config>,
-        >::new(G1_DST.as_bytes())
+        >::new(BLS12381_G1_DST.as_bytes())
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -497,7 +497,7 @@ impl Host {
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g2::Config>,
-        >::new(G2_DST.as_bytes())
+        >::new(BLS12381_G2_DST.as_bytes())
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
