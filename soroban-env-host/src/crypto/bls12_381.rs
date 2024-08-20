@@ -2,13 +2,15 @@ use crate::host_object::HostVec;
 use crate::{
     budget::AsBudget,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError, Val,
+    BytesObject, Host, HostError, Val, Bool
 };
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::short_weierstrass::Projective;
 use ark_ec::CurveGroup;
+use ark_ff::Field;
 use sha2::Sha256;
+use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
 use ark_bls12_381::{Bls12_381, Fr, G1Affine};
@@ -242,7 +244,8 @@ impl Host {
         self.serialize_into_bytesobj(fp12, 12 * G1_SERIALIZED_SIZE, "fp12")
     }
 
-    fn g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
+    // TODO: generic vec_T_from_vecobj
+    pub(crate) fn g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
         let mut points: Vec<G1Affine> = vec![];
         // TODO: metering charge for memalloc
@@ -258,7 +261,7 @@ impl Host {
         Ok(points)
     }
 
-    fn scalar_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
+    pub(crate) fn scalar_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
         let len: u32 = self.vec_len(vs)?.into();
         let mut scalars: Vec<Fr> = vec![];
         // TODO: metering charge for memalloc
@@ -315,6 +318,14 @@ impl Host {
                 ScErrorCode::InternalError,
                 "length mismatch for g1 msm",
                 &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        if u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "G1 msm input vector length must be > 0",
+                &[],
             ));
         }
         let points = self.g1_vec_from_vecobj(vp)?;
@@ -389,7 +400,7 @@ impl Host {
         })
     }
 
-    fn g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
+    pub(crate) fn g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
         // TODO: metering charge memalloc
         let mut points: Vec<G2Affine> = vec![];
@@ -440,13 +451,21 @@ impl Host {
     ) -> Result<G2Projective, HostError> {
         // TODO: metering msm
         let p_len = self.vec_len(vp)?;
-        let s_len = self.vec_len(vs)?;
+        let s_len = self.vec_len(vs)?;        
         if u32::from(p_len) != u32::from(s_len) {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
                 "length mismatch for g2 msm",
                 &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        if u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "G2 msm input vector length must be > 0",
+                &[],
             ));
         }
         let points = self.g2_vec_from_vecobj(vp)?;
@@ -518,8 +537,8 @@ impl Host {
 
     pub(crate) fn pairing_internal(
         &self,
-        p1: G1Affine,
-        p2: G2Affine,
+        vp1: Vec<G1Affine>,
+        vp2: Vec<G2Affine>,
     ) -> Result<PairingOutput<Bls12_381>, HostError> {
         // TODO: metering. we lump these two steps into one cost type
         self.as_budget().bulk_charge(
@@ -527,7 +546,7 @@ impl Host {
             equivalent_wasm_insns(ExperimentalCostType::Bls12381Pairing),
             None,
         )?;
-        let mlo = Bls12_381::multi_miller_loop([p1], [p2]);
+        let mlo = Bls12_381::multi_miller_loop(vp1, vp2);
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
@@ -536,5 +555,13 @@ impl Host {
                 &[],
             )
         })
+    }
+
+    pub(crate) fn check_pairing_output(&self, output: &PairingOutput<Bls12_381>) -> Result<Bool, HostError> {
+        self.charge_budget(ContractCostType::MemCmp, Some(576))?;
+        match output.0.cmp(&Fq12::ONE) {
+            Ordering::Equal => Ok(true.into()),
+            _ => Ok(false.into()),
+        }
     }
 }

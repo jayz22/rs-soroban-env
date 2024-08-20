@@ -3032,8 +3032,37 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let g1 = self.g1_affine_deserialize_from_bytesobj(p1)?;
         let g2 = self.g2_affine_deserialize_from_bytesobj(p2)?;
-        let po = self.pairing_internal(g1, g2)?;
+        let po = self.pairing_internal(vec![g1], vec![g2])?;
         self.fp12_serialize(po.0)
+    }
+
+    fn bls12_381_multi_pairing_check(&self,
+        vmcaller: &mut VmCaller<Host>,
+        vp1: VecObject,
+        vp2: VecObject,
+    ) -> Result<Bool, HostError> {
+        let l1 = self.vec_len(vmcaller, vp1)?;
+        let l2 = self.vec_len(vmcaller, vp2)?;
+        if u32::from(l1) != u32::from(l2) {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "length mismatch for multi-pairing-check",
+                &[l1.to_val(), l2.to_val()],
+            ));
+        }
+        if u32::from(l1) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "Multi-pairing-check input vector length must be > 0",
+                &[],
+            ));
+        }
+        let vp1 = self.g1_vec_from_vecobj(vp1)?;
+        let vp2 = self.g2_vec_from_vecobj(vp2)?;
+        let output = self.pairing_internal(vp1, vp2)?;
+        self.check_pairing_output(&output)
     }
 
     // endregion: "crypto" module functions
