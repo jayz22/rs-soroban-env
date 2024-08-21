@@ -2932,21 +2932,41 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
-        scalar_le_bytes: BytesObject,
+        scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
         let p0 = self.g1_affine_deserialize_from_bytesobj(p0)?;
-        let scalar = self.scalar_from_le_bytesobj(scalar_le_bytes)?;
+        let scalar = self.scalar_from_u256val(scalar)?;
         let res = self.g1_mul_internal(p0, scalar)?;
         self.g1_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g1_msm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<Host>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let res = self.g1_msm_from_vecobj(vp, vs)?;
+        let p_len = self.vec_len(vmcaller, vp)?;
+        let s_len = self.vec_len(vmcaller, vs)?;
+        if u32::from(p_len) != u32::from(s_len) {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "length mismatch for g1 msm",
+                &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        if u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "G1 msm input vector length must be > 0",
+                &[],
+            ));
+        }
+        let points = self.g1_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
+        let res = self.g1_msm_internal(&points, &scalars)?;
         self.g1_projective_serialize_uncompressed(res)
     }
 
@@ -2985,21 +3005,41 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
-        scalar_le_bytes: BytesObject,
+        scalar_le_bytes: U256Val,
     ) -> Result<BytesObject, HostError> {
         let p0 = self.g2_affine_deserialize_from_bytesobj(p0)?;
-        let scalar = self.scalar_from_le_bytesobj(scalar_le_bytes)?;
+        let scalar = self.scalar_from_u256val(scalar_le_bytes)?;
         let res = self.g2_mul_internal(p0, scalar)?;
         self.g2_projective_serialize_uncompressed(res)
     }
 
     fn bls12_381_g2_msm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<Host>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let res = self.g2_msm_from_vecobj(vp, vs)?;
+        let p_len = self.vec_len(vmcaller, vp)?;
+        let s_len = self.vec_len(vmcaller, vs)?;
+        if u32::from(p_len) != u32::from(s_len) {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "length mismatch for g2 msm",
+                &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        if u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "G2 msm input vector length must be > 0",
+                &[],
+            ));
+        }
+        let points = self.g2_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
+        let res = self.g2_msm_internal(&points, &scalars)?;
         self.g2_projective_serialize_uncompressed(res)
     }
 

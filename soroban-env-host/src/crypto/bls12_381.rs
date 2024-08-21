@@ -24,7 +24,7 @@ use ark_ec::{
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use soroban_env_common::{Env, TryFromVal, VecObject};
+use soroban_env_common::{Env, TryFromVal, U256Object, U256Small, U256Val, VecObject, U256};
 
 const G1_SERIALIZED_SIZE: usize = 48;
 const G2_SERIALIZED_SIZE: usize = 96;
@@ -216,19 +216,17 @@ impl Host {
         self.g2_affine_serialize_uncompressed(g2_affine)
     }
 
-    pub(crate) fn scalar_from_le_bytesobj(&self, so: BytesObject) -> Result<Fr, HostError> {
-        // TODO: metering
-        self.visit_obj(so, |scalar: &ScBytes| {
-            // the implementation of this function is in arc_ff prime.rs trait PrimeField.
-            // it performs some extra check if bytes is larger than the field size, which
-            // is not applicable to us.
-            // so the actual logic is just serializing a bytes array into a
-            // Fp256<MontBackend<FrConfig, 4>>, which wraps a BigInt<4>.
-            // TODO: here we've assumed the input contains the exactly field element we want
-            // should we instead provide from_random_bytes_with_flags? (ark_ff/fp/mod.rs)
-            self.charge_budget(ContractCostType::ValDeser, Some(32))?;
-            Ok(Fr::from_le_bytes_mod_order(scalar.as_slice()))
-        })
+    pub(crate) fn scalar_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
+        // TODO: metering. 
+        let fr = if let Ok(small) = U256Small::try_from(sv) {
+            Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
+        } else {
+            let obj: U256Object = sv.try_into()?;
+            self.visit_obj(obj, |u: &U256|  {
+                Ok(Fr::from_le_bytes_mod_order(&u.to_le_bytes()))
+            })?
+        };
+        Ok(fr)
     }
 
     pub(crate) fn fp_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
@@ -268,7 +266,7 @@ impl Host {
         scalars.reserve(len as usize);
         let _ = self.visit_obj(vs, |vs: &HostVec| {
             for s in vs.iter() {
-                let ss = self.scalar_from_le_bytesobj(BytesObject::try_from_val(self, s)?)?;
+                let ss = self.scalar_from_u256val(U256Val::try_from_val(self, s)?)?;
                 scalars.push(ss);
             }
             Ok(())
@@ -304,32 +302,11 @@ impl Host {
         Ok(p0.mul(scalar))
     }
 
-    pub(crate) fn g1_msm_from_vecobj(
+    pub(crate) fn g1_msm_internal(
         &self,
-        vp: VecObject,
-        vs: VecObject,
+        points: &[G1Affine],
+        scalars: &[Fr],
     ) -> Result<G1Projective, HostError> {
-        // TODO: metering charge for msm, which can possibly be analytically composed of O(len) of scalar multiplication plus point addition
-        let p_len = self.vec_len(vp)?;
-        let s_len = self.vec_len(vs)?;
-        if u32::from(p_len) != u32::from(s_len) {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                "length mismatch for g1 msm",
-                &[p_len.to_val(), s_len.to_val()],
-            ));
-        }
-        if u32::from(p_len) == 0 {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                "G1 msm input vector length must be > 0",
-                &[],
-            ));
-        }
-        let points = self.g1_vec_from_vecobj(vp)?;
-        let scalars = self.scalar_vec_from_vecobj(vs)?;
         // TODO: metering. The actual logic happens inside msm_bigint_wnaf (ark_ec/variable_base/mod.rs)
         // under branch negation is cheap.
         // the unchecked version just skips the length equal check
@@ -338,8 +315,7 @@ impl Host {
             equivalent_wasm_insns(ExperimentalCostType::Bls12381G1Msm),
             None,
         )?;
-        let res = G1Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
-        Ok(res)
+        Ok(G1Projective::msm_unchecked(points, scalars))
     }
 
     pub(crate) fn map_fp_to_g1_internal(&self, fp: Fq) -> Result<G1Affine, HostError> {
@@ -444,39 +420,18 @@ impl Host {
         Ok(p0.mul(scalar))
     }
 
-    pub(crate) fn g2_msm_from_vecobj(
+    pub(crate) fn g2_msm_internal(
         &self,
-        vp: VecObject,
-        vs: VecObject,
+        points: &[G2Affine],
+        scalars: &[Fr],
     ) -> Result<G2Projective, HostError> {
         // TODO: metering msm
-        let p_len = self.vec_len(vp)?;
-        let s_len = self.vec_len(vs)?;        
-        if u32::from(p_len) != u32::from(s_len) {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                "length mismatch for g2 msm",
-                &[p_len.to_val(), s_len.to_val()],
-            ));
-        }
-        if u32::from(p_len) == 0 {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                "G2 msm input vector length must be > 0",
-                &[],
-            ));
-        }
-        let points = self.g2_vec_from_vecobj(vp)?;
-        let scalars = self.scalar_vec_from_vecobj(vs)?;
         self.as_budget().bulk_charge(
             ContractCostType::WasmInsnExec,
             equivalent_wasm_insns(ExperimentalCostType::Bls12381G2Msm),
             None,
         )?;
-        let res = G2Projective::msm_unchecked(points.as_slice(), scalars.as_slice());
-        Ok(res)
+        Ok(G2Projective::msm_unchecked(points, scalars))
     }
 
     pub(crate) fn map_fp2_to_g2_internal(&self, fp: Fq2) -> Result<G2Affine, HostError> {
