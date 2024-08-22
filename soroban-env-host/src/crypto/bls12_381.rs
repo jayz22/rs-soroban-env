@@ -33,27 +33,36 @@ const G2_SERIALIZED_SIZE: usize = 96;
 pub const BLS12381_G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
 pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
 
-//========================================================================
+//============================================================================
 // Some preliminary calibration results
-//========================================================================
-// | Cost Type                     |      CPU |   equivalent wasm insns  |
-// |:------------------------------|---------:|-------------------------:|
-// | Bls12381G1ProjectiveToAffine  |    88023 |                   22006  |
-// | Bls12381G1Add                 |     7281 |                    1821  |
-// | Bls12381G1Mul                 |  2277752 |                  569438  |
-// | Bls12381G1Msm                 |  7237111 |                 1809278  |
-// | Bls12381MapFpToG1             |  1510142 |                  377536  |
-// | Bls12381HashToG1              |  3192885 |                  798222  |
-// | Bls12381G2ProjectiveToAffine  |    95994 |                   24000  |
-// | Bls12381G2Add                 |    23570 |                    5893  |
-// | Bls12381G2Mul                 |  7075352 |                 1768838  |
-// | Bls12381G2Msm                 | 10681052 |                 2670263  |
-// | Bls12381MapFp2ToG2            |  2367368 |                  591842  |
-// | Bls12381HashToG2              |  6870057 |                 1717515  |
-// | Bls12381Pairing               | 14442475 |                 3610619  |
+//============================================================================
+// | Cost Type                          |      CPU |   equivalent wasm insns  |
+// |:-----------------------------------|---------:|-------------------------:|
+// | Bls12381FpSerializeUncompressed    |      987 |                     247  |
+// | Bls12381FpDeserializeUncompressed  |     1058 |                     265  |
+// | Bls12381G1ProjectiveToAffine       |    88023 |                   22006  |
+// | Bls12381G1Add                      |     7281 |                    1821  |
+// | Bls12381G1Mul                      |  2277752 |                  569438  |
+// | Bls12381MapFpToG1                  |  1510142 |                  377536  |
+// | Bls12381HashToG1                   |  3192885 |                  798222  |
+// | Bls12381G2ProjectiveToAffine       |    95994 |                   24000  |
+// | Bls12381G2Add                      |    23570 |                    5893  |
+// | Bls12381G2Mul                      |  7075352 |                 1768838  |
+// | Bls12381MapFp2ToG2                 |  2367368 |                  591842  |
+// | Bls12381HashToG2                   |  6870057 |                 1717515  |
 //========================================================================
 
+
+// | Cost Type               | CPU (const) | eqv. wasm insns | CPU (lin)   | eqv. InstantiateWasmDataSegmentBytes |
+// |:------------------------|------------:|----------------:|------------:|------------------------------------:|
+// | Bls12381G1Msm            |    2214244  |          553561 |  109110682  |                           7793621  |
+// | Bls12381G2Msm            |    7226943  |         1806736 |  336724933  |                          24051781  |
+// | Bls12381Pairing          |    9852690  |         2463173 |  586227065  |                          41873362  |
+
+
 enum ExperimentalCostType {
+    Bls12381FpSerializeUncompressed,
+    Bls12381FpDeserializeUncompressed,
     Bls12381G1ProjectiveToAffine,
     Bls12381G1Add,
     Bls12381G1Mul,
@@ -75,19 +84,30 @@ enum ExperimentalCostType {
 // The whole point is to work without XDR definition of these new types
 fn equivalent_wasm_insns(ty: ExperimentalCostType) -> u64 {
     match ty {
+        ExperimentalCostType::Bls12381FpSerializeUncompressed => 247,
+        ExperimentalCostType::Bls12381FpDeserializeUncompressed => 265,
         ExperimentalCostType::Bls12381G1ProjectiveToAffine => 22006,
         ExperimentalCostType::Bls12381G1Add => 1821,
         ExperimentalCostType::Bls12381G1Mul => 569438,
-        ExperimentalCostType::Bls12381G1Msm => 1809278,
+        ExperimentalCostType::Bls12381G1Msm => 553561,
         ExperimentalCostType::Bls12381MapFpToG1 => 377536,
         ExperimentalCostType::Bls12381HashToG1 => 798222,
         ExperimentalCostType::Bls12381G2ProjectiveToAffine => 24000,
         ExperimentalCostType::Bls12381G2Add => 5893,
         ExperimentalCostType::Bls12381G2Mul => 1768838,
-        ExperimentalCostType::Bls12381G2Msm => 2670263,
+        ExperimentalCostType::Bls12381G2Msm => 1806736,
         ExperimentalCostType::Bls12381MapFp2ToG2 => 591842,
         ExperimentalCostType::Bls12381HashToG2 => 1717515,
-        ExperimentalCostType::Bls12381Pairing => 3610619,
+        ExperimentalCostType::Bls12381Pairing => 2463173,
+    }
+}
+
+fn equivalent_instantiate_wasm_data_segment_bytes(ty: ExperimentalCostType) -> u64 {
+    match ty {
+        ExperimentalCostType::Bls12381G1Msm => 7793621,
+        ExperimentalCostType::Bls12381G2Msm => 24051781,
+        ExperimentalCostType::Bls12381Pairing => 41873362,
+        _ => 0
     }
 }
 
@@ -380,6 +400,11 @@ impl Host {
             equivalent_wasm_insns(ExperimentalCostType::Bls12381G1Msm),
             None,
         )?;
+        self.as_budget().bulk_charge(
+            ContractCostType::InstantiateWasmDataSegmentBytes,
+            points.len() as u64,
+            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381G1Msm)),
+        )?;
         Ok(G1Projective::msm_unchecked(points, scalars))
     }
 
@@ -496,6 +521,11 @@ impl Host {
             equivalent_wasm_insns(ExperimentalCostType::Bls12381G2Msm),
             None,
         )?;
+        self.as_budget().bulk_charge(
+            ContractCostType::InstantiateWasmDataSegmentBytes,
+            points.len() as u64,
+            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381G2Msm)),
+        )?;
         Ok(G2Projective::msm_unchecked(points, scalars))
     }
 
@@ -566,6 +596,11 @@ impl Host {
             equivalent_wasm_insns(ExperimentalCostType::Bls12381Pairing),
             None,
         )?;
+        self.as_budget().bulk_charge(
+            ContractCostType::InstantiateWasmDataSegmentBytes,
+            vp1.len() as u64,
+            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381Pairing)),
+        )?;        
         let mlo = Bls12_381::multi_miller_loop(vp1, vp2);
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
