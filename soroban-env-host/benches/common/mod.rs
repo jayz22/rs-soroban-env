@@ -76,6 +76,7 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Bls12381G1AffineSerializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381G2AffineSerializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381Fp12SerializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FpSerializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381G1AffineDeserializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381G2AffineDeserializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381FpDeserializeUncompressedMeasure>(&mut params)?;

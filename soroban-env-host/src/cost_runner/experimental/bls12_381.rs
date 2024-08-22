@@ -26,6 +26,7 @@ pub struct Bls12381PairingRun;
 pub struct Bls12381G1AffineSerializeUncompressedRun;
 pub struct Bls12381G2AffineSerializeUncompressedRun;
 pub struct Bls12381Fp12SerializeUncompressedRun;
+pub struct Bls12381FpSerializeUncompressedRun;
 pub struct Bls12381G1AffineDeserializeUncompressedRun;
 pub struct Bls12381G2AffineDeserializeUncompressedRun;
 pub struct Bls12381FpDeserializeUncompressedRun;
@@ -360,6 +361,11 @@ impl_ser_runner_for_bls!(
     Bls12381Fp12SerializeUncompressedRun,
     Bls12381Fp12SerializeUncompressed,
     Fq12
+);
+impl_ser_runner_for_bls!(
+    Bls12381FpSerializeUncompressedRun,
+    Bls12381FpSerializeUncompressed,
+    Fq
 );
 
 macro_rules! impl_deser_runner_for_bls {

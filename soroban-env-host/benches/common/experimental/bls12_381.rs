@@ -16,7 +16,7 @@ use soroban_env_host::{
         Bls12381G2ProjectiveToAffineSample, Bls12381HashToG1Run, Bls12381HashToG1Sample,
         Bls12381HashToG2Run, Bls12381HashToG2Sample, Bls12381MapFp2ToG2Run,
         Bls12381MapFp2ToG2Sample, Bls12381MapFpToG1Run, Bls12381MapFpToG1Sample,
-        Bls12381PairingRun, Bls12381PairingSample,
+        Bls12381PairingRun, Bls12381PairingSample, Bls12381FpSerializeUncompressedRun
     },
     Host,
 };
@@ -217,6 +217,13 @@ impl HostCostMeasurement for Bls12381Fp12SerializeUncompressedMeasure {
     type Runner = Bls12381Fp12SerializeUncompressedRun;
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Fq12 {
         Fq12::rand(rng)
+    }
+}
+pub(crate) struct Bls12381FpSerializeUncompressedMeasure;
+impl HostCostMeasurement for Bls12381FpSerializeUncompressedMeasure {
+    type Runner = Bls12381FpSerializeUncompressedRun;
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Fq {
+        Fq::rand(rng)
     }
 }
 

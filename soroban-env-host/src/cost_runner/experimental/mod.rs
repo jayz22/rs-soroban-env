@@ -29,6 +29,7 @@ pub enum ExperimentalCostType {
     Bls12381G1AffineSerializeUncompressed,
     Bls12381G2AffineDeserializeUncompressed,
     Bls12381G2AffineSerializeUncompressed,
+    Bls12381FpSerializeUncompressed,
     Bls12381FpDeserializeUncompressed,
     Bls12381Fp2DeserializeUncompressed,
     Bls12381Fp12SerializeUncompressed,
@@ -71,6 +72,9 @@ impl Name for ExperimentalCostType {
             }
             ExperimentalCostType::Bls12381G2AffineSerializeUncompressed => {
                 "Bls12381G2AffineSerializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381FpSerializeUncompressed => {
+                "Bls12381FpSerializeUncompressed"
             }
             ExperimentalCostType::Bls12381FpDeserializeUncompressed => {
                 "Bls12381FpDeserializeUncompressed"
