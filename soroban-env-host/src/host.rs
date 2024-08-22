@@ -2975,7 +2975,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         fp: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let fp = self.fp_from_bytesobj(fp)?;
+        let fp = self.fp_deserialize_from_bytesobj(fp)?;
         let g1 = self.map_fp_to_g1_internal(fp)?;
         self.g1_affine_serialize_uncompressed(g1)
     }
@@ -3048,7 +3048,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         fp2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let fp2 = self.fp2_from_bytesobj(fp2)?;
+        let fp2 = self.fp2_deserialize_from_bytesobj(fp2)?;
         let g2 = self.map_fp2_to_g2_internal(fp2)?;
         self.g2_affine_serialize_uncompressed(g2)
     }
@@ -3073,10 +3073,11 @@ impl VmCallerEnv for Host {
         let g1 = self.g1_affine_deserialize_from_bytesobj(p1)?;
         let g2 = self.g2_affine_deserialize_from_bytesobj(p2)?;
         let po = self.pairing_internal(vec![g1], vec![g2])?;
-        self.fp12_serialize(po.0)
+        self.fp12_serialize_uncompressed(po.0)
     }
 
-    fn bls12_381_multi_pairing_check(&self,
+    fn bls12_381_multi_pairing_check(
+        &self,
         vmcaller: &mut VmCaller<Host>,
         vp1: VecObject,
         vp2: VecObject,

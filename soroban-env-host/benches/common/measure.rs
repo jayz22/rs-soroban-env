@@ -316,8 +316,8 @@ pub trait HostCostMeasurement: Sized {
         <Self::Runner as CostRunner>::run(host, samples, recycled_samples)
     }
 
-    fn get_tracker(host: &Host) -> CostTracker {
-        <Self::Runner as CostRunner>::get_tracker(host)
+    fn get_tracker(host: &Host, sample: &<Self::Runner as CostRunner>::SampleType) -> CostTracker {
+        <Self::Runner as CostRunner>::get_tracker(host, sample)
     }
 
     // This is kind of a hack to account for the additional cpu_insn overhead
@@ -340,7 +340,8 @@ fn harness<HCM: HostCostMeasurement, R>(
     host: &Host,
     alloc_group_token: Option<&mut AllocationGroupToken>,
     runner: &mut R,
-    samples: Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
+    sample: <<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType,
+    repeat_iters: u64,
 ) -> Measurement
 where
     R: FnMut(
@@ -349,7 +350,8 @@ where
         &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
     ),
 {
-    let mut recycled_samples = Vec::with_capacity(samples.len());
+    let samples = (0..repeat_iters).map(|_| sample.clone()).collect();
+    let mut recycled_samples = Vec::with_capacity(repeat_iters as usize);
     host.as_budget().reset_unlimited().unwrap();
 
     let mut ht = HostTracker::new();
@@ -361,7 +363,7 @@ where
 
     // Note: the `iterations` here is not same as `RUN_ITERATIONS`. This is the `N` part of the
     // cost model, which is `RUN_ITERATIONS` * "model iterations from the sample"
-    let ct = HCM::get_tracker(&host);
+    let ct = HCM::get_tracker(&host, &sample);
     Measurement {
         iterations: ct.iterations,
         inputs: ct.inputs,
@@ -398,15 +400,18 @@ where
             Some(s) => s,
             None => break,
         };
-        let samples = (0..<HCM::Runner as CostRunner>::RUN_ITERATIONS)
-            .map(|_| sample.clone())
-            .collect();
         // This part is the `N_r * Overhead_s` part of equation [2].
         // This is 0 unless we are doing wasm-insn level calibration
         let samples_cpu_insns_overhead = <HCM::Runner as CostRunner>::RUN_ITERATIONS
             .saturating_mul(HCM::get_insns_overhead_per_sample(&host, &sample));
 
-        let mut mes = harness::<HCM, _>(&host, Some(&mut alloc_group_token), &mut runner, samples);
+        let mut mes = harness::<HCM, _>(
+            &host,
+            Some(&mut alloc_group_token),
+            &mut runner,
+            sample,
+            <HCM::Runner as CostRunner>::RUN_ITERATIONS,
+        );
         mes.cpu_insns -= samples_cpu_insns_overhead;
         // the return result contains `N_r * (f(x) + Overhead_b)` (see equation [2])
         ret.push(mes);

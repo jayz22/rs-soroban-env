@@ -2,7 +2,7 @@ use crate::host_object::HostVec;
 use crate::{
     budget::AsBudget,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError, Val, Bool
+    Bool, BytesObject, Host, HostError, Val,
 };
 use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -92,65 +92,61 @@ fn equivalent_wasm_insns(ty: ExperimentalCostType) -> u64 {
 }
 
 impl Host {
-    fn deserialize_from_bytesobj<T: CanonicalDeserialize>(
+    pub(crate) fn deserialize_from_slice<T: CanonicalDeserialize>(
         &self,
-        bo: BytesObject,
-        expected_size: usize,
-        msg: &str,
+        slice: &[u8],
+        ty: ContractCostType,
     ) -> Result<T, HostError> {
-        self.visit_obj(bo, |bytes: &ScBytes| {
-            if bytes.len() != expected_size {
-                return Err(self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    format!("bls12-381 {msg}: invalid input length to deserialize").as_str(),
-                    &[
-                        Val::from_u32(bytes.len() as u32).into(),
-                        Val::from_u32(expected_size as u32).into(),
-                    ],
-                ));
-            }
-
-            // TODO: metering charge for canonical deserialize with size
-            self.charge_budget(ContractCostType::Sec1DecodePointUncompressed, None)?;
-            T::deserialize_with_mode(bytes.as_slice(), Compress::No, Validate::Yes).map_err(|_e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "bls12-381: unable to deserialize",
-                    &[],
-                )
-            })
+        self.charge_budget(ty, None)?;
+        T::deserialize_with_mode(slice, Compress::No, Validate::Yes).map_err(|_e| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bls12-381: unable to deserialize",
+                &[],
+            )
         })
     }
 
     pub(crate) fn serialize_into_bytesobj<T: CanonicalSerialize>(
         &self,
         element: T,
-        expected_size: usize,
+        buf: &mut [u8],
+        ty: ContractCostType,
         msg: &str,
-    ) -> Result<BytesObject, HostError> {
-        // TODO: metering charge canonical serializeation
-        self.charge_budget(ContractCostType::ValSer, Some(expected_size as u64))?;
-        let mut buf = vec![0; expected_size];
-        element
-            .serialize_uncompressed(buf.as_mut_slice())
-            .map_err(|_e| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InternalError,
-                    format!("bls12-381: unable to serialize {msg}").as_str(),
-                    &[],
-                )
-            })?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
+    ) -> Result<(), HostError> {
+        self.charge_budget(ty, None)?;
+        element.serialize_uncompressed(buf).map_err(|_e| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                format!("bls12-381: unable to serialize {msg}").as_str(),
+                &[],
+            )
+        })?;
+        Ok(())
     }
 
     pub(crate) fn g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
     ) -> Result<G1Affine, HostError> {
-        self.deserialize_from_bytesobj(bo, 2 * G1_SERIALIZED_SIZE, "G1 affine")
+        let expected_size = 2 * G1_SERIALIZED_SIZE;
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if bytes.len() != expected_size {
+                return Err(self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    format!("bls12-381 G1 affine: invalid input length to deserialize").as_str(),
+                    &[
+                        Val::from_u32(bytes.len() as u32).into(),
+                        Val::from_u32(expected_size as u32).into(),
+                    ],
+                ));
+            }
+            // TODO: replace with actual cost type xdr
+            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })
     }
 
     pub(crate) fn g1_projective_into_affine(
@@ -170,7 +166,15 @@ impl Host {
         &self,
         g1: G1Affine,
     ) -> Result<BytesObject, HostError> {
-        self.serialize_into_bytesobj(g1, 2 * G1_SERIALIZED_SIZE, "G1 affine")
+        let mut buf = vec![0; 2 * G1_SERIALIZED_SIZE];
+        // TODO: charge for the actual cost type xdr
+        self.serialize_into_bytesobj(
+            g1,
+            &mut buf,
+            ContractCostType::Sec1DecodePointUncompressed,
+            "G1 affine",
+        )?;
+        self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
     pub(crate) fn g1_projective_serialize_uncompressed(
@@ -185,7 +189,22 @@ impl Host {
         &self,
         bo: BytesObject,
     ) -> Result<G2Affine, HostError> {
-        self.deserialize_from_bytesobj(bo, 2 * G2_SERIALIZED_SIZE, "G2 affine")
+        let expected_size = 2 * G2_SERIALIZED_SIZE;
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if bytes.len() != expected_size {
+                return Err(self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    format!("bls12-381 G2 affine: invalid input length to deserialize").as_str(),
+                    &[
+                        Val::from_u32(bytes.len() as u32).into(),
+                        Val::from_u32(expected_size as u32).into(),
+                    ],
+                ));
+            }
+            // TODO: replace with actual cost type xdr
+            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })
     }
 
     pub(crate) fn g2_projective_into_affine(
@@ -205,7 +224,15 @@ impl Host {
         &self,
         g2: G2Affine,
     ) -> Result<BytesObject, HostError> {
-        self.serialize_into_bytesobj(g2, 2 * G2_SERIALIZED_SIZE, "G2 affine")
+        let mut buf = vec![0; 2 * G2_SERIALIZED_SIZE];
+        // TODO: charge for the actual cost type xdr
+        self.serialize_into_bytesobj(
+            g2,
+            &mut buf,
+            ContractCostType::Sec1DecodePointUncompressed,
+            "G2 affine",
+        )?;
+        self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
     pub(crate) fn g2_projective_serialize_uncompressed(
@@ -217,29 +244,67 @@ impl Host {
     }
 
     pub(crate) fn scalar_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
-        // TODO: metering. 
+        // TODO: metering.
         let fr = if let Ok(small) = U256Small::try_from(sv) {
             Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
         } else {
             let obj: U256Object = sv.try_into()?;
-            self.visit_obj(obj, |u: &U256|  {
+            self.visit_obj(obj, |u: &U256| {
                 Ok(Fr::from_le_bytes_mod_order(&u.to_le_bytes()))
             })?
         };
         Ok(fr)
     }
 
-    pub(crate) fn fp_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
-        self.deserialize_from_bytesobj(bo, G1_SERIALIZED_SIZE, "field element (Fp)")
+    pub(crate) fn fp_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
+        let expected_size = 2 * G1_SERIALIZED_SIZE;
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if bytes.len() != expected_size {
+                return Err(self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    format!("bls12-381 field element (Fp): invalid input length to deserialize")
+                        .as_str(),
+                    &[
+                        Val::from_u32(bytes.len() as u32).into(),
+                        Val::from_u32(expected_size as u32).into(),
+                    ],
+                ));
+            }
+            // TODO: replace with actual cost type xdr
+            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })
     }
 
-    pub(crate) fn fp2_from_bytesobj(&self, bo: BytesObject) -> Result<Fq2, HostError> {
-        self.deserialize_from_bytesobj(bo, G2_SERIALIZED_SIZE, "extention field element (Fp2)")
+    pub(crate) fn fp2_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq2, HostError> {
+        let expected_size = 2 * G2_SERIALIZED_SIZE;
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if bytes.len() != expected_size {
+                return Err(self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    format!("bls12-381 quadradic extention field element (Fp2): invalid input length to deserialize").as_str(),
+                    &[
+                        Val::from_u32(bytes.len() as u32).into(),
+                        Val::from_u32(expected_size as u32).into(),
+                    ],
+                ));
+            }
+            // TODO: replace with actual cost type xdr
+            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })
     }
 
-    pub(crate) fn fp12_serialize(&self, fp12: Fq12) -> Result<BytesObject, HostError> {
-        // TODO: verifty fp12 is always 576 bytes long
-        self.serialize_into_bytesobj(fp12, 12 * G1_SERIALIZED_SIZE, "fp12")
+    pub(crate) fn fp12_serialize_uncompressed(&self, fp12: Fq12) -> Result<BytesObject, HostError> {
+        let mut buf = vec![0; 12 * G1_SERIALIZED_SIZE];
+        // TODO: charge for the actual cost type xdr
+        self.serialize_into_bytesobj(
+            fp12,
+            &mut buf,
+            ContractCostType::Sec1DecodePointUncompressed,
+            "fp12",
+        )?;
+        self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
     // TODO: generic vec_T_from_vecobj
@@ -512,7 +577,10 @@ impl Host {
         })
     }
 
-    pub(crate) fn check_pairing_output(&self, output: &PairingOutput<Bls12_381>) -> Result<Bool, HostError> {
+    pub(crate) fn check_pairing_output(
+        &self,
+        output: &PairingOutput<Bls12_381>,
+    ) -> Result<Bool, HostError> {
         self.charge_budget(ContractCostType::MemCmp, Some(576))?;
         match output.0.cmp(&Fq12::ONE) {
             Ordering::Equal => Ok(true.into()),

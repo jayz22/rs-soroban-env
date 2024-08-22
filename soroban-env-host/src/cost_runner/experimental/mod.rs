@@ -31,7 +31,7 @@ pub enum ExperimentalCostType {
     Bls12381G2AffineSerializeUncompressed,
     Bls12381FpDeserializeUncompressed,
     Bls12381Fp2DeserializeUncompressed,
-    Bls12381Fp12Serialize,
+    Bls12381Fp12SerializeUncompressed,
     Bls12381G1ProjectiveToAffine,
     Bls12381G2ProjectiveToAffine,
     Bls12381G1Add,
@@ -42,7 +42,6 @@ pub enum ExperimentalCostType {
     Bls12381G2Add,
     Bls12381G2Mul,
     Bls12381G2Msm,
-    Bls12381G2MultiScalarMultiplication,
     Bls12381MapFp2ToG2,
     Bls12381HashToG2,
     Bls12381MillerLoop,
@@ -79,7 +78,9 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => {
                 "Bls12381Fp2DeserializeUncompressed"
             }
-            ExperimentalCostType::Bls12381Fp12Serialize => "Bls12381Fp12Serialize",
+            ExperimentalCostType::Bls12381Fp12SerializeUncompressed => {
+                "Bls12381Fp12SerializeUncompressed"
+            }
             ExperimentalCostType::Bls12381G1ProjectiveToAffine => "Bls12381G1ProjectiveToAffine",
             ExperimentalCostType::Bls12381G2ProjectiveToAffine => "Bls12381G2ProjectiveToAffine",
             ExperimentalCostType::Bls12381G1Add => "Bls12381G1Add",
@@ -90,9 +91,6 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381G2Add => "Bls12381G2Add",
             ExperimentalCostType::Bls12381G2Mul => "Bls12381G2Mul",
             ExperimentalCostType::Bls12381G2Msm => "Bls12381G2Msm",
-            ExperimentalCostType::Bls12381G2MultiScalarMultiplication => {
-                "Bls12381G2MultiScalarMultiplication"
-            }
             ExperimentalCostType::Bls12381MapFp2ToG2 => "Bls12381MapFp2ToG2",
             ExperimentalCostType::Bls12381HashToG2 => "Bls12381HashToG2",
             ExperimentalCostType::Bls12381MillerLoop => "Bls12381MillerLoop",
