@@ -336,18 +336,6 @@ impl Host {
         })
     }
 
-    pub(crate) fn fp12_serialize_uncompressed(&self, fp12: Fq12) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; 12 * G1_SERIALIZED_SIZE];
-        // TODO: charge for the actual cost type xdr
-        self.serialize_into_bytesobj(
-            fp12,
-            &mut buf,
-            ContractCostType::Sec1DecodePointUncompressed,
-            "fp12",
-        )?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
-    }
-
     // TODO: generic vec_T_from_vecobj
     pub(crate) fn g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
