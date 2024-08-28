@@ -2,24 +2,12 @@ use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
 use crate::{
-    auth::AuthorizationManager,
-    budget::{AsBudget, Budget},
-    events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostVec},
-    impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
-    impl_wrapping_obj_to_num,
-    num::*,
-    storage::Storage,
-    vm::ModuleCache,
-    xdr::{
+    auth::AuthorizationManager, budget::{AsBudget, Budget}, events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer}, host_object::{HostMap, HostObject, HostVec}, impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num, num::*, storage::Storage, vm::ModuleCache, xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint, Uint256,
-    },
-    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
-    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
-    Val, VecObject, VmCaller, VmCallerEnv, Void,
+    }, AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal, Val, VecObject, VmCaller, VmCallerEnv, Void, TryIntoVal
 };
 
 mod comparison;
@@ -3104,6 +3092,23 @@ impl VmCallerEnv for Host {
         let vp2 = self.g2_vec_from_vecobj(vp2)?;
         let output = self.pairing_internal(vp1, vp2)?;
         self.check_pairing_output(&output)
+    }
+
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_add, scalar_add_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_sub, scalar_sub_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_mul, scalar_mul_internal);
+    
+    fn bls12_381_fr_pow(&self,_vmcaller: &mut VmCaller<Self::VmUserState>,lhs:U256Val,rhs:U64Val) -> Result<U256Val,Self::Error> {
+        let lhs = self.scalar_from_u256val(lhs)?;
+        let rhs: u64 = rhs.try_into_val(self)?;
+        let res = self.scalar_pow_internal(&lhs, &[rhs])?;
+        self.scalar_to_u256val(res)
+    }
+    
+    fn bls12_381_fr_inv(&self,_vmcaller: &mut VmCaller<Self::VmUserState>,lhs:U256Val) -> Result<U256Val,Self::Error> {
+        let lhs = self.scalar_from_u256val(lhs)?;
+        let res = self.scalar_inv_internal(&lhs)?;
+        self.scalar_to_u256val(res)
     }
 
     // endregion: "crypto" module functions

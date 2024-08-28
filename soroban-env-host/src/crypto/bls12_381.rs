@@ -8,10 +8,11 @@ use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective}
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::short_weierstrass::Projective;
 use ark_ec::CurveGroup;
-use ark_ff::Field;
+use ark_ff::{Field, BigInteger};
 use sha2::Sha256;
 use std::cmp::Ordering;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, AddAssign, MulAssign, SubAssign};
+use num_traits::Zero;
 
 use ark_bls12_381::{Bls12_381, Fr, G1Affine};
 use ark_ec::{
@@ -23,8 +24,8 @@ use ark_ec::{
     scalar_mul::variable_base::VariableBaseMSM,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, PrimeField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use soroban_env_common::{Env, TryFromVal, U256Object, U256Small, U256Val, VecObject, U256};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate, Valid};
+use soroban_env_common::{ConversionError, Env, TryFromVal, U256Object, U256Small, U256Val, VecObject, U256};
 
 const G1_SERIALIZED_SIZE: usize = 48;
 const G2_SERIALIZED_SIZE: usize = 96;
@@ -53,11 +54,11 @@ pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:
 //========================================================================
 
 
-// | Cost Type               | CPU (const) | eqv. wasm insns | CPU (lin)   | eqv. InstantiateWasmDataSegmentBytes |
-// |:------------------------|------------:|----------------:|------------:|------------------------------------:|
-// | Bls12381G1Msm            |    2214244  |          553561 |  109110682  |                           7793621  |
-// | Bls12381G2Msm            |    7226943  |         1806736 |  336724933  |                          24051781  |
-// | Bls12381Pairing          |    9852690  |         2463173 |  586227065  |                          41873362  |
+// | Cost Type               | CPU (const) | CPU (lin)   |   | eqv. wasm insns eqv. InstantiateWasmDataSegmentBytes |
+// |:------------------------|------------:|------------:|-  |----------------:-----------------------------------:|
+// | Bls12381G1Msm            |    2214244  |  109110682  |   |          553561                           7793621  |
+// | Bls12381G2Msm            |    7226943  |  336724933  |   |         1806736                          24051781  |
+// | Bls12381Pairing          |    9852690  |  586227065  |   |         2463173                          41873362  |
 
 
 enum ExperimentalCostType {
@@ -112,13 +113,15 @@ fn equivalent_instantiate_wasm_data_segment_bytes(ty: ExperimentalCostType) -> u
 }
 
 impl Host {
-    pub(crate) fn deserialize_from_slice<T: CanonicalDeserialize>(
+    pub(crate) fn deserialize_uncompessed_no_validate<T: CanonicalDeserialize>(
         &self,
         slice: &[u8],
         ty: ContractCostType,
     ) -> Result<T, HostError> {
         self.charge_budget(ty, None)?;
-        T::deserialize_with_mode(slice, Compress::No, Validate::Yes).map_err(|_e| {
+        // validation turned off here to isolate the cost of serialization.
+        // proper validation has to be performed outside of this function
+        T::deserialize_with_mode(slice, Compress::No, Validate::No).map_err(|_e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
@@ -152,7 +155,7 @@ impl Host {
         bo: BytesObject,
     ) -> Result<G1Affine, HostError> {
         let expected_size = 2 * G1_SERIALIZED_SIZE;
-        self.visit_obj(bo, |bytes: &ScBytes| {
+        let g1: G1Affine = self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
                     ScErrorType::Crypto,
@@ -165,8 +168,14 @@ impl Host {
                 ));
             }
             // TODO: replace with actual cost type xdr
-            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
-        })
+            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })?;
+        // TODO: charge for point validation
+        if g1.check().is_err() {
+            Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G1 affine deserialize: invalid point", &[]))
+        } else {
+            Ok(g1)
+        }
     }
 
     pub(crate) fn g1_projective_into_affine(
@@ -210,7 +219,7 @@ impl Host {
         bo: BytesObject,
     ) -> Result<G2Affine, HostError> {
         let expected_size = 2 * G2_SERIALIZED_SIZE;
-        self.visit_obj(bo, |bytes: &ScBytes| {
+        let g2: G2Affine = self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
                     ScErrorType::Crypto,
@@ -223,8 +232,14 @@ impl Host {
                 ));
             }
             // TODO: replace with actual cost type xdr
-            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
-        })
+            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+        })?;
+        // TODO: charge for point validation
+        if g2.check().is_err() {
+            Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G2 affine deserialize: invalid point", &[]))
+        } else {
+            Ok(g2)
+        }        
     }
 
     pub(crate) fn g2_projective_into_affine(
@@ -276,6 +291,12 @@ impl Host {
         Ok(fr)
     }
 
+    pub(crate) fn scalar_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
+        let bytes: [u8; 32] = scalar.into_bigint().to_bytes_be().try_into().map_err(|_| HostError::from(ConversionError))?;
+        let u = U256::from_be_bytes(bytes);
+        self.map_err(U256Val::try_from_val(self, &u))
+    }
+
     pub(crate) fn fp_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
         let expected_size = 2 * G1_SERIALIZED_SIZE;
         self.visit_obj(bo, |bytes: &ScBytes| {
@@ -292,7 +313,7 @@ impl Host {
                 ));
             }
             // TODO: replace with actual cost type xdr
-            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
         })
     }
 
@@ -311,7 +332,7 @@ impl Host {
                 ));
             }
             // TODO: replace with actual cost type xdr
-            self.deserialize_from_slice(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
         })
     }
 
@@ -621,5 +642,37 @@ impl Host {
             Ordering::Equal => Ok(true.into()),
             _ => Ok(false.into()),
         }
+    }
+    
+    pub(crate) fn scalar_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        //TODO: metering
+        lhs.add_assign(rhs);        
+        Ok(())
+    }
+
+    pub(crate) fn scalar_sub_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        //TODO: metering
+        lhs.sub_assign(rhs);        
+        Ok(())
+    }
+
+    pub(crate) fn scalar_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        //TODO: metering
+        lhs.mul_assign(rhs);        
+        Ok(())
+    }
+
+    pub(crate) fn scalar_pow_internal(&self, lhs: &Fr, rhs: &[u64]) -> Result<Fr, HostError> {
+        // TODO: metering
+        Ok(lhs.pow(rhs))
+    }
+
+    pub(crate) fn scalar_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
+        //TODO: metering
+        // we bubble up this condition check to be extra safe, and provide a better error
+        if lhs.is_zero() {
+            return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "scalar inversion input is zero", &[]));
+        }
+        lhs.inverse().ok_or_else(|| self.err(ScErrorType::Crypto, ScErrorCode::InternalError,format!("scalar inversion {} failed", lhs).as_str(), &[]))
     }
 }
