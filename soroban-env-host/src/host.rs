@@ -2,12 +2,24 @@ use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
 use crate::{
-    auth::AuthorizationManager, budget::{AsBudget, Budget}, events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer}, host_object::{HostMap, HostObject, HostVec}, impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num, num::*, storage::Storage, vm::ModuleCache, xdr::{
+    auth::AuthorizationManager,
+    budget::{AsBudget, Budget},
+    events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
+    host_object::{HostMap, HostObject, HostVec},
+    impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
+    impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
+    num::*,
+    storage::Storage,
+    vm::ModuleCache,
+    xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint, Uint256,
-    }, AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal, Val, VecObject, VmCaller, VmCallerEnv, Void, TryIntoVal
+    },
+    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
+    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
+    TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -2923,7 +2935,7 @@ impl VmCallerEnv for Host {
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
         let p0 = self.g1_affine_deserialize_from_bytesobj(p0)?;
-        let scalar = self.scalar_from_u256val(scalar)?;
+        let scalar = self.fr_from_u256val(scalar)?;
         let res = self.g1_mul_internal(p0, scalar)?;
         self.g1_projective_serialize_uncompressed(res)
     }
@@ -2996,7 +3008,7 @@ impl VmCallerEnv for Host {
         scalar_le_bytes: U256Val,
     ) -> Result<BytesObject, HostError> {
         let p0 = self.g2_affine_deserialize_from_bytesobj(p0)?;
-        let scalar = self.scalar_from_u256val(scalar_le_bytes)?;
+        let scalar = self.fr_from_u256val(scalar_le_bytes)?;
         let res = self.g2_mul_internal(p0, scalar)?;
         self.g2_projective_serialize_uncompressed(res)
     }
@@ -3082,21 +3094,30 @@ impl VmCallerEnv for Host {
         self.check_pairing_output(&output)
     }
 
-    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_add, scalar_add_internal);
-    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_sub, scalar_sub_internal);
-    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_mul, scalar_mul_internal);
-    
-    fn bls12_381_fr_pow(&self,_vmcaller: &mut VmCaller<Self::VmUserState>,lhs:U256Val,rhs:U64Val) -> Result<U256Val,Self::Error> {
-        let lhs = self.scalar_from_u256val(lhs)?;
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_add, fr_add_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_sub, fr_sub_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_mul, fr_mul_internal);
+
+    fn bls12_381_fr_pow(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U64Val,
+    ) -> Result<U256Val, Self::Error> {
+        let lhs = self.fr_from_u256val(lhs)?;
         let rhs: u64 = rhs.try_into_val(self)?;
-        let res = self.scalar_pow_internal(&lhs, &[rhs])?;
-        self.scalar_to_u256val(res)
+        let res = self.fr_pow_internal(&lhs, &[rhs])?;
+        self.fr_to_u256val(res)
     }
-    
-    fn bls12_381_fr_inv(&self,_vmcaller: &mut VmCaller<Self::VmUserState>,lhs:U256Val) -> Result<U256Val,Self::Error> {
-        let lhs = self.scalar_from_u256val(lhs)?;
-        let res = self.scalar_inv_internal(&lhs)?;
-        self.scalar_to_u256val(res)
+
+    fn bls12_381_fr_inv(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+    ) -> Result<U256Val, Self::Error> {
+        let lhs = self.fr_from_u256val(lhs)?;
+        let res = self.fr_inv_internal(&lhs)?;
+        self.fr_to_u256val(res)
     }
 
     // endregion: "crypto" module functions

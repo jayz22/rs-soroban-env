@@ -76,10 +76,10 @@ macro_rules! impl_bls12_381_fr_arith_host_fns {
             lhs: U256Val,
             rhs: U256Val,
         ) -> Result<U256Val, Self::Error> {
-            let mut lhs = self.scalar_from_u256val(lhs)?;
-            let rhs = self.scalar_from_u256val(rhs)?;
+            let mut lhs = self.fr_from_u256val(lhs)?;
+            let rhs = self.fr_from_u256val(rhs)?;
             self.$method(&mut lhs, &rhs)?;
-            self.scalar_to_u256val(lhs)
+            self.fr_to_u256val(lhs)
         }
-    };    
+    };
 }

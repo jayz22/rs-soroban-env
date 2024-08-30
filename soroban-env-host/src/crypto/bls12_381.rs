@@ -8,11 +8,11 @@ use ark_bls12_381::{g1, g2, Fq, Fq12, Fq2, G1Projective, G2Affine, G2Projective}
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::short_weierstrass::Projective;
 use ark_ec::CurveGroup;
-use ark_ff::{Field, BigInteger};
+use ark_ff::{BigInteger, Field};
+use num_traits::Zero;
 use sha2::Sha256;
 use std::cmp::Ordering;
-use std::ops::{Add, Mul, AddAssign, MulAssign, SubAssign};
-use num_traits::Zero;
+use std::ops::{Add, AddAssign, Mul, MulAssign, SubAssign};
 
 use ark_bls12_381::{Bls12_381, Fr, G1Affine};
 use ark_ec::{
@@ -24,11 +24,15 @@ use ark_ec::{
     scalar_mul::variable_base::VariableBaseMSM,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, PrimeField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate, Valid};
-use soroban_env_common::{ConversionError, Env, TryFromVal, U256Object, U256Small, U256Val, VecObject, U256};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Valid, Validate};
+use soroban_env_common::{
+    ConversionError, Env, TryFromVal, U256Object, U256Small, U256Val, VecObject, U256,
+};
 
-const G1_SERIALIZED_SIZE: usize = 48;
-const G2_SERIALIZED_SIZE: usize = 96;
+const FP_SERIALIZED_SIZE: usize = 48;
+const FP2_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
+const G1_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
+const G2_SERIALIZED_SIZE: usize = FP2_SERIALIZED_SIZE * 2;
 // Domain Separation Tags specified according to https://datatracker.ietf.org/doc/rfc9380/
 // section 3.1, 8.8
 pub const BLS12381_G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
@@ -53,13 +57,11 @@ pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:
 // | Bls12381HashToG2                   |  6870057 |                 1717515  |
 //========================================================================
 
-
 // | Cost Type               | CPU (const) | CPU (lin)   |   | eqv. wasm insns eqv. InstantiateWasmDataSegmentBytes |
 // |:------------------------|------------:|------------:|-  |----------------:-----------------------------------:|
 // | Bls12381G1Msm            |    2214244  |  109110682  |   |          553561                           7793621  |
 // | Bls12381G2Msm            |    7226943  |  336724933  |   |         1806736                          24051781  |
 // | Bls12381Pairing          |    9852690  |  586227065  |   |         2463173                          41873362  |
-
 
 enum ExperimentalCostType {
     Bls12381FpSerializeUncompressed,
@@ -108,7 +110,7 @@ fn equivalent_instantiate_wasm_data_segment_bytes(ty: ExperimentalCostType) -> u
         ExperimentalCostType::Bls12381G1Msm => 7793621,
         ExperimentalCostType::Bls12381G2Msm => 24051781,
         ExperimentalCostType::Bls12381Pairing => 41873362,
-        _ => 0
+        _ => 0,
     }
 }
 
@@ -154,7 +156,7 @@ impl Host {
         &self,
         bo: BytesObject,
     ) -> Result<G1Affine, HostError> {
-        let expected_size = 2 * G1_SERIALIZED_SIZE;
+        let expected_size = G1_SERIALIZED_SIZE;
         let g1: G1Affine = self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
@@ -167,12 +169,50 @@ impl Host {
                     ],
                 ));
             }
-            // TODO: replace with actual cost type xdr
+            // validated encoded flags: 
+            // - the compression_flag should be unset
+            // - the infinity_flag should be set **only if** rest of bits are all zero
+            // - the sort_flag should be unset
+            let compression_flag_set = (bytes[0] >> 7) & 1;
+            let infinity_flag_set = (bytes[0] >> 6) & 1;
+            let sort_flag_set = (bytes[0] >> 5) & 1;
+            if compression_flag_set == 1 {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G1 affine deserialize: compression flag (bit 0) is set", &[]));
+            }
+            if infinity_flag_set == 1 && !(bytes[1..G1_SERIALIZED_SIZE] == [0; G1_SERIALIZED_SIZE-1] && (bytes[0] & 0b0001_1111) == 0) {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G1 affine deserialize: infinity flag (bit 1) is set while remaining bits are not all zero", &[]));
+            }
+            if sort_flag_set == 1 {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G1 affine deserialize: sort flag (bit 2) is set", &[]));
+            }
+
+            // CanonicalDeserialize of Affine<P> calls into
+            // P::deserialize_with_mode, where P is bls12_381::g1::Config, the
+            // core logic is in bls12_381::curves::util::read_g1_uncompressed.
+            //
+            // The bls12_381 lib already expects the input to be serialized in
+            // big-endian order (aligning with the common standard and contrary
+            // to ark::serialize's little-endian convention), 
+            // 
+            // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
+            // most-significant three bits of X are flags:
+            // 
+            // `bits(X) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
+            // 
+            // these flags are checked and then masked off before serialization.
+            // The Y bits however, do not have the highest three bits masked
+            // off, so it is possible for Y to exceed 381 bits. TODO: replace
+            // with actual cost type xdr
             self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
         })?;
         // TODO: charge for point validation
         if g1.check().is_err() {
-            Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G1 affine deserialize: invalid point", &[]))
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bls12-381 G1 affine deserialize: invalid point",
+                &[],
+            ))
         } else {
             Ok(g1)
         }
@@ -195,7 +235,16 @@ impl Host {
         &self,
         g1: G1Affine,
     ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; 2 * G1_SERIALIZED_SIZE];
+        let mut buf = vec![0; 2 * FP_SERIALIZED_SIZE];
+        // CanonicalSerialize of Affine<P> calls into
+        // P::serialize_with_mode, where P is ark_bls12_381::g1::Config. The
+        // output bytes will be in following format: `be_bytes(X) || be_bytes(Y)`
+        // , where the most-significant three bits of X encodes the flags, i.e.
+        //
+        // bits(X) =  [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]
+        //
+        // This aligns with our standard (which is same as the ZCash standard
+        // https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
         // TODO: charge for the actual cost type xdr
         self.serialize_into_bytesobj(
             g1,
@@ -218,7 +267,7 @@ impl Host {
         &self,
         bo: BytesObject,
     ) -> Result<G2Affine, HostError> {
-        let expected_size = 2 * G2_SERIALIZED_SIZE;
+        let expected_size = G2_SERIALIZED_SIZE;
         let g2: G2Affine = self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
@@ -231,15 +280,50 @@ impl Host {
                     ],
                 ));
             }
+            // validated encoded flags: 
+            // - the compression_flag should be unset
+            // - the infinity_flag should be set **only if** rest of bits are all zero
+            // - the sort_flag should be unset
+            let compression_flag_set = (bytes[0] >> 7) & 1;
+            let infinity_flag_set = (bytes[0] >> 6) & 1;
+            let sort_flag_set = (bytes[0] >> 5) & 1;
+            if compression_flag_set == 1 {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G2 affine deserialize: compression flag (bit 0) is set", &[]));
+            }
+            if infinity_flag_set == 1 && !(bytes[1..G2_SERIALIZED_SIZE] == [0; G2_SERIALIZED_SIZE-1] && (bytes[0] & 0b0001_1111) == 0) {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G2 affine deserialize: infinity flag (bit 1) is set while remaining bits are not all zero", &[]));
+            }
+            if sort_flag_set == 1 {
+                return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G2 affine deserialize: sort flag (bit 2) is set", &[]));
+            }
+            // See comment in `g1_affine_deserialize_from_bytesobj` first.
+            // 
+            // CanonicalSerialize of Affine<P>, where P is ark_bls12_381::curves::g2::Config, 
+            // calls into P::deserialize_with_mode.
+            // Input to the deserialize function we are calling into is expected
+            // to be `X_c1 || X_c0 || Y_c1 || Y_c0`, where each component is
+            // big-endian serialized bytes. The most significant three bits of X_c1 are
+            // flags, i.e. 
+            // 
+            // `bits(X_c1) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]` 
+            //
+            // This format already conforms to our requirements, which matches the OG zcash standard:
+            // https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
+            //
             // TODO: replace with actual cost type xdr
             self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
         })?;
         // TODO: charge for point validation
         if g2.check().is_err() {
-            Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "bls12-381 G2 affine deserialize: invalid point", &[]))
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bls12-381 G2 affine deserialize: invalid point",
+                &[],
+            ))
         } else {
             Ok(g2)
-        }        
+        }
     }
 
     pub(crate) fn g2_projective_into_affine(
@@ -259,7 +343,18 @@ impl Host {
         &self,
         g2: G2Affine,
     ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; 2 * G2_SERIALIZED_SIZE];
+        let mut buf = vec![0; 2 * FP2_SERIALIZED_SIZE];
+        // CanonicalSerialization of Affine<P> where P is ark_bls12_381::curves::g2::Config,
+        // calls into P::serialize_with_mode.
+        //
+        // The output is in the following format:
+        // `be_bytes(X_c1) || be_bytes(X_c0) || be_bytes(Y_c1) || be_bytes(Y_c0)`
+        //
+        // The most significant three bits of `X_c1` encodes the flags, i.e.
+        // `bits(X_c1) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
+        //
+        // This format conforms to the zcash standard https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
+        // and is the one we picked.
         // TODO: charge for the actual cost type xdr
         self.serialize_into_bytesobj(
             g2,
@@ -278,7 +373,7 @@ impl Host {
         self.g2_affine_serialize_uncompressed(g2_affine)
     }
 
-    pub(crate) fn scalar_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
+    pub(crate) fn fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
         // TODO: metering.
         let fr = if let Ok(small) = U256Small::try_from(sv) {
             Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
@@ -291,14 +386,19 @@ impl Host {
         Ok(fr)
     }
 
-    pub(crate) fn scalar_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
-        let bytes: [u8; 32] = scalar.into_bigint().to_bytes_be().try_into().map_err(|_| HostError::from(ConversionError))?;
+    pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
+        // TODO: metering
+        let bytes: [u8; 32] = scalar
+            .into_bigint()
+            .to_bytes_be()
+            .try_into()
+            .map_err(|_| HostError::from(ConversionError))?;
         let u = U256::from_be_bytes(bytes);
         self.map_err(U256Val::try_from_val(self, &u))
     }
 
     pub(crate) fn fp_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
-        let expected_size = 2 * G1_SERIALIZED_SIZE;
+        let expected_size = FP_SERIALIZED_SIZE;
         self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
@@ -312,13 +412,24 @@ impl Host {
                     ],
                 ));
             }
+            // CanonicalDeserialize for Fp<P, N> assumes input bytes in
+            // little-endian order, with the highest bits being empty flags.
+            // thus we must first reverse the bytes before passing them in.
+            // there is no check for Fp
+            self.charge_budget(ContractCostType::MemCpy, Some(FP_SERIALIZED_SIZE as u64));
+            let mut buf = [0u8; FP_SERIALIZED_SIZE];
+            buf.copy_from_slice(bytes);
+            buf.reverse();
             // TODO: replace with actual cost type xdr
-            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+            self.deserialize_uncompessed_no_validate(
+                &buf,
+                ContractCostType::Sec1DecodePointUncompressed,
+            )
         })
     }
 
     pub(crate) fn fp2_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq2, HostError> {
-        let expected_size = 2 * G2_SERIALIZED_SIZE;
+        let expected_size = FP2_SERIALIZED_SIZE;
         self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != expected_size {
                 return Err(self.err(
@@ -331,8 +442,23 @@ impl Host {
                     ],
                 ));
             }
+            // CanonicalDeserialize for QuadExtField<P> reads the first chunk,
+            // deserialize it into Fp as c0. Then repeat for c1. The
+            // deserialization for Fp follows same rules as above, where the
+            // bytes are expected in little-endian, with the highest bits being
+            // empty flags. There is no check involved.
+            //
+            // This is entirely reversed from the [zcash standard](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
+            // the one we have adopted. This is the input format we provide:
+            // 
+            // `input = be_bytes(c1) || be_bytes(c0)`
+            // 
+            // So we just need to reverse our input.
+            let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+            buf.copy_from_slice(&bytes);
+            buf.reverse();
             // TODO: replace with actual cost type xdr
-            self.deserialize_uncompessed_no_validate(&bytes, ContractCostType::Sec1DecodePointUncompressed)
+            self.deserialize_uncompessed_no_validate(&buf, ContractCostType::Sec1DecodePointUncompressed)
         })
     }
 
@@ -360,7 +486,7 @@ impl Host {
         scalars.reserve(len as usize);
         let _ = self.visit_obj(vs, |vs: &HostVec| {
             for s in vs.iter() {
-                let ss = self.scalar_from_u256val(U256Val::try_from_val(self, s)?)?;
+                let ss = self.fr_from_u256val(U256Val::try_from_val(self, s)?)?;
                 scalars.push(ss);
             }
             Ok(())
@@ -412,7 +538,9 @@ impl Host {
         self.as_budget().bulk_charge(
             ContractCostType::InstantiateWasmDataSegmentBytes,
             points.len() as u64,
-            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381G1Msm)),
+            Some(equivalent_instantiate_wasm_data_segment_bytes(
+                ExperimentalCostType::Bls12381G1Msm,
+            )),
         )?;
         Ok(G1Projective::msm_unchecked(points, scalars))
     }
@@ -533,7 +661,9 @@ impl Host {
         self.as_budget().bulk_charge(
             ContractCostType::InstantiateWasmDataSegmentBytes,
             points.len() as u64,
-            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381G2Msm)),
+            Some(equivalent_instantiate_wasm_data_segment_bytes(
+                ExperimentalCostType::Bls12381G2Msm,
+            )),
         )?;
         Ok(G2Projective::msm_unchecked(points, scalars))
     }
@@ -608,8 +738,10 @@ impl Host {
         self.as_budget().bulk_charge(
             ContractCostType::InstantiateWasmDataSegmentBytes,
             vp1.len() as u64,
-            Some(equivalent_instantiate_wasm_data_segment_bytes(ExperimentalCostType::Bls12381Pairing)),
-        )?;        
+            Some(equivalent_instantiate_wasm_data_segment_bytes(
+                ExperimentalCostType::Bls12381Pairing,
+            )),
+        )?;
         let mlo = Bls12_381::multi_miller_loop(vp1, vp2);
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
@@ -631,36 +763,48 @@ impl Host {
             _ => Ok(false.into()),
         }
     }
-    
-    pub(crate) fn scalar_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+
+    pub(crate) fn fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
         //TODO: metering
-        lhs.add_assign(rhs);        
+        lhs.add_assign(rhs);
         Ok(())
     }
 
-    pub(crate) fn scalar_sub_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+    pub(crate) fn fr_sub_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
         //TODO: metering
-        lhs.sub_assign(rhs);        
+        lhs.sub_assign(rhs);
         Ok(())
     }
 
-    pub(crate) fn scalar_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+    pub(crate) fn fr_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
         //TODO: metering
-        lhs.mul_assign(rhs);        
+        lhs.mul_assign(rhs);
         Ok(())
     }
 
-    pub(crate) fn scalar_pow_internal(&self, lhs: &Fr, rhs: &[u64]) -> Result<Fr, HostError> {
+    pub(crate) fn fr_pow_internal(&self, lhs: &Fr, rhs: &[u64]) -> Result<Fr, HostError> {
         // TODO: metering
         Ok(lhs.pow(rhs))
     }
 
-    pub(crate) fn scalar_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
+    pub(crate) fn fr_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
         //TODO: metering
         // we bubble up this condition check to be extra safe, and provide a better error
         if lhs.is_zero() {
-            return Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "scalar inversion input is zero", &[]));
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "scalar inversion input is zero",
+                &[],
+            ));
         }
-        lhs.inverse().ok_or_else(|| self.err(ScErrorType::Crypto, ScErrorCode::InternalError,format!("scalar inversion {} failed", lhs).as_str(), &[]))
+        lhs.inverse().ok_or_else(|| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                format!("scalar inversion {} failed", lhs).as_str(),
+                &[],
+            )
+        })
     }
 }
