@@ -62,57 +62,6 @@ pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:
 // | Bls12381G2Msm            |    7226943  |  336724933  |   |         1806736                          24051781  |
 // | Bls12381Pairing          |    9852690  |  586227065  |   |         2463173                          41873362  |
 
-enum ExperimentalCostType {
-    Bls12381FpSerializeUncompressed,
-    Bls12381FpDeserializeUncompressed,
-    Bls12381G1ProjectiveToAffine,
-    Bls12381G1Add,
-    Bls12381G1Mul,
-    Bls12381G1Msm,
-    Bls12381MapFpToG1,
-    Bls12381HashToG1,
-    Bls12381G2ProjectiveToAffine,
-    Bls12381G2Add,
-    Bls12381G2Mul,
-    Bls12381G2Msm,
-    Bls12381MapFp2ToG2,
-    Bls12381HashToG2,
-    Bls12381Pairing,
-}
-
-// each wasm insn is calibrated to be 4 cpu insns
-// based on the calibration results shown above, we convert the cpu count into
-// number of equivalent wasm insns.
-// The whole point is to work without XDR definition of these new types
-fn equivalent_wasm_insns(ty: ExperimentalCostType) -> u64 {
-    match ty {
-        ExperimentalCostType::Bls12381FpSerializeUncompressed => 247,
-        ExperimentalCostType::Bls12381FpDeserializeUncompressed => 265,
-        ExperimentalCostType::Bls12381G1ProjectiveToAffine => 22006,
-        ExperimentalCostType::Bls12381G1Add => 1821,
-        ExperimentalCostType::Bls12381G1Mul => 569438,
-        ExperimentalCostType::Bls12381G1Msm => 553561,
-        ExperimentalCostType::Bls12381MapFpToG1 => 377536,
-        ExperimentalCostType::Bls12381HashToG1 => 798222,
-        ExperimentalCostType::Bls12381G2ProjectiveToAffine => 24000,
-        ExperimentalCostType::Bls12381G2Add => 5893,
-        ExperimentalCostType::Bls12381G2Mul => 1768838,
-        ExperimentalCostType::Bls12381G2Msm => 1806736,
-        ExperimentalCostType::Bls12381MapFp2ToG2 => 591842,
-        ExperimentalCostType::Bls12381HashToG2 => 1717515,
-        ExperimentalCostType::Bls12381Pairing => 2463173,
-    }
-}
-
-fn equivalent_instantiate_wasm_data_segment_bytes(ty: ExperimentalCostType) -> u64 {
-    match ty {
-        ExperimentalCostType::Bls12381G1Msm => 7793621,
-        ExperimentalCostType::Bls12381G2Msm => 24051781,
-        ExperimentalCostType::Bls12381Pairing => 41873362,
-        _ => 0,
-    }
-}
-
 impl Host {
     // This is the internal routine performing deserialization on various
     // element types, which can be conceptually decomposed into units of Fp
@@ -397,7 +346,7 @@ impl Host {
             // little-endian order, with the highest bits being empty flags.
             // thus we must first reverse the bytes before passing them in.
             // there is no other check for Fp besides the length check.
-            self.charge_budget(ContractCostType::MemCpy, Some(FP_SERIALIZED_SIZE as u64));
+            self.charge_budget(ContractCostType::MemCpy, Some(FP_SERIALIZED_SIZE as u64))?;
             let mut buf = [0u8; FP_SERIALIZED_SIZE];
             buf.copy_from_slice(bytes);
             buf.reverse();
@@ -480,7 +429,7 @@ impl Host {
         p0: G1Affine,
         p1: G1Affine,
     ) -> Result<G1Projective, HostError> {
-        self.charge_budget(ContractCostType::Bls12381G1Add, None);
+        self.charge_budget(ContractCostType::Bls12381G1Add, None)?;
         Ok(p0.add(p1))
     }
 
@@ -489,7 +438,7 @@ impl Host {
         p0: G1Affine,
         scalar: Fr,
     ) -> Result<G1Projective, HostError> {
-        self.charge_budget(ContractCostType::Bls12381G1Mul, None);
+        self.charge_budget(ContractCostType::Bls12381G1Mul, None)?;
         Ok(p0.mul(scalar))
     }
 
@@ -667,6 +616,7 @@ impl Host {
                 Error::from_type_and_code(ScErrorType::Crypto, ScErrorCode::InvalidInput).into(),
             );
         }
+        self.charge_budget(ContractCostType::Bls12381Pairing, Some(vp1.len() as u64))?;
         // This is doing exact same as `Bls12_381::pairing(p, q)`, but avoids
         // the `unwrap`
         let mlo = Bls12_381::multi_miller_loop(vp1, vp2);

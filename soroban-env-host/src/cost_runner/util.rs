@@ -88,7 +88,7 @@ macro_rules! impl_lin_cost_runner_for_bls_deref_sample {
         impl CostRunner for $runner {
             const COST_TYPE: CostType = CostType::Contract($cost);
 
-            const RUN_ITERATIONS: u64 = 1;
+            const RUN_ITERATIONS: u64 = 100;
 
             type SampleType = $sample;
 

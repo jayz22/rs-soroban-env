@@ -98,8 +98,15 @@ impl Measurements {
         let ymin = points.iter().map(|(_, y)| *y).reduce(f32::min).unwrap();
         let ymax = points.iter().map(|(_, y)| *y).reduce(f32::max).unwrap();
         let ymean = points.iter().map(|(_, y)| *y).sum::<f32>() / points.len().max(1) as f32;
+        let mut ystd = points.iter().map(|(_, y)| (*y - ymean) * (*y - ymean)).sum::<f32>() / points.len().max(1) as f32;
+        ystd = ystd.sqrt();
 
         if ymin == ymax {
+            println!(
+                "{} output: min == max == {}",
+                out_name,
+                ymin
+            );            
             return;
         }
         let hist = textplots::utils::histogram(&points, ymin, ymax, 30);
@@ -125,12 +132,13 @@ impl Measurements {
             in_max / in_min.max(1.0)
         );
         println!(
-            "{} output: min {}; max {}; max/min = {}; mean = {}; count = {}",
+            "{} output: min {}; max {}; max/min = {}; mean = {}; std = {}, count = {}",
             out_name,
             ymin.separate_with_commas(),
             ymax.separate_with_commas(),
             ymax / ymin.max(1.0),
             ymean.separate_with_commas(),
+            ystd.separate_with_commas(),
             points.len()
         );
         Chart::new(180, 60, ymin - 100.0, ymax + 100.0)
