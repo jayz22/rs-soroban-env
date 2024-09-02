@@ -1,4 +1,4 @@
-mod bls12_381;
+// mod bls12_381;
 mod decode_secp256r1_sig;
 mod ecdsa_secp256k1_verify;
 mod ecdsa_secp256r1_recover;
@@ -6,7 +6,7 @@ mod ed25519_scalar_mut;
 mod read_xdr;
 mod sec1_decode_point_compressed;
 
-pub use bls12_381::*;
+// pub use bls12_381::*;
 pub use decode_secp256r1_sig::*;
 pub use ecdsa_secp256k1_verify::*;
 pub use ecdsa_secp256r1_recover::*;
@@ -29,25 +29,9 @@ pub enum ExperimentalCostType {
     Bls12381G1AffineSerializeUncompressed,
     Bls12381G2AffineDeserializeUncompressed,
     Bls12381G2AffineSerializeUncompressed,
-    Bls12381FpSerializeUncompressed,
-    Bls12381FpDeserializeUncompressed,
     Bls12381Fp2DeserializeUncompressed,
-    Bls12381Fp12SerializeUncompressed,
-    Bls12381G1ProjectiveToAffine,
-    Bls12381G2ProjectiveToAffine,
-    Bls12381G1Add,
-    Bls12381G1Mul,
-    Bls12381G1Msm,
-    Bls12381MapFpToG1,
-    Bls12381HashToG1,
-    Bls12381G2Add,
-    Bls12381G2Mul,
-    Bls12381G2Msm,
-    Bls12381MapFp2ToG2,
-    Bls12381HashToG2,
     Bls12381MillerLoop,
     Bls12381FinalExp,
-    Bls12381Pairing,
 }
 
 impl Name for ExperimentalCostType {
@@ -73,33 +57,11 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381G2AffineSerializeUncompressed => {
                 "Bls12381G2AffineSerializeUncompressed"
             }
-            ExperimentalCostType::Bls12381FpSerializeUncompressed => {
-                "Bls12381FpSerializeUncompressed"
-            }
-            ExperimentalCostType::Bls12381FpDeserializeUncompressed => {
-                "Bls12381FpDeserializeUncompressed"
-            }
             ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => {
                 "Bls12381Fp2DeserializeUncompressed"
             }
-            ExperimentalCostType::Bls12381Fp12SerializeUncompressed => {
-                "Bls12381Fp12SerializeUncompressed"
-            }
-            ExperimentalCostType::Bls12381G1ProjectiveToAffine => "Bls12381G1ProjectiveToAffine",
-            ExperimentalCostType::Bls12381G2ProjectiveToAffine => "Bls12381G2ProjectiveToAffine",
-            ExperimentalCostType::Bls12381G1Add => "Bls12381G1Add",
-            ExperimentalCostType::Bls12381G1Mul => "Bls12381G1Mul",
-            ExperimentalCostType::Bls12381G1Msm => "Bls12381G1Msm",
-            ExperimentalCostType::Bls12381MapFpToG1 => "Bls12381MapFpToG1",
-            ExperimentalCostType::Bls12381HashToG1 => "Bls12381HashToG1",
-            ExperimentalCostType::Bls12381G2Add => "Bls12381G2Add",
-            ExperimentalCostType::Bls12381G2Mul => "Bls12381G2Mul",
-            ExperimentalCostType::Bls12381G2Msm => "Bls12381G2Msm",
-            ExperimentalCostType::Bls12381MapFp2ToG2 => "Bls12381MapFp2ToG2",
-            ExperimentalCostType::Bls12381HashToG2 => "Bls12381HashToG2",
             ExperimentalCostType::Bls12381MillerLoop => "Bls12381MillerLoop",
             ExperimentalCostType::Bls12381FinalExp => "Bls12381FinalExp",
-            ExperimentalCostType::Bls12381Pairing => "Bls12381Pairing",
         }
     }
 }

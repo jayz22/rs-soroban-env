@@ -1,25 +1,130 @@
 use crate::common::HostCostMeasurement;
-use ark_bls12_381::{Fq, Fq12, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::UniformRand;
 use ark_serialize::CanonicalSerialize;
-use rand::{rngs::StdRng, Rng};
+use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{
     cost_runner::{
-        Bls12381Fp12SerializeUncompressedRun, Bls12381Fp2DeserializeUncompressedRun,
-        Bls12381FpDeserializeUncompressedRun, Bls12381FpSerializeUncompressedRun, Bls12381G1AddRun,
-        Bls12381G1AddSample, Bls12381G1AffineDeserializeUncompressedRun,
-        Bls12381G1AffineSerializeUncompressedRun, Bls12381G1MsmRun, Bls12381G1MsmSample,
-        Bls12381G1MulRun, Bls12381G1MulSample, Bls12381G1ProjectiveToAffineRun,
-        Bls12381G1ProjectiveToAffineSample, Bls12381G2AddRun, Bls12381G2AddSample,
-        Bls12381G2AffineDeserializeUncompressedRun, Bls12381G2AffineSerializeUncompressedRun,
-        Bls12381G2MsmRun, Bls12381G2MsmSample, Bls12381G2MulRun, Bls12381G2MulSample,
-        Bls12381G2ProjectiveToAffineRun, Bls12381G2ProjectiveToAffineSample, Bls12381HashToG1Run,
-        Bls12381HashToG1Sample, Bls12381HashToG2Run, Bls12381HashToG2Sample, Bls12381MapFp2ToG2Run,
-        Bls12381MapFp2ToG2Sample, Bls12381MapFpToG1Run, Bls12381MapFpToG1Sample,
-        Bls12381PairingRun, Bls12381PairingSample,
+        Bls12381DecodeFpRun, Bls12381DecodeFpSample, Bls12381EncodeFpRun, Bls12381EncodeFpSample,
+        Bls12381FrAddRun, Bls12381FrAddSubMulSample, Bls12381FrFromU256Run,
+        Bls12381FrFromU256Sample, Bls12381FrInvRun, Bls12381FrInvSample, Bls12381FrMulRun,
+        Bls12381FrPowRun, Bls12381FrPowSample, Bls12381FrSubRun, Bls12381FrToU256Run,
+        Bls12381FrToU256Sample, Bls12381G1AddRun, Bls12381G1AddSample, Bls12381G1MsmRun,
+        Bls12381G1MsmSample, Bls12381G1MulRun, Bls12381G1MulSample,
+        Bls12381G1ProjectiveToAffineRun, Bls12381G1ProjectiveToAffineSample, Bls12381G1ValidateRun,
+        Bls12381G1ValidateSample, Bls12381G2AddRun, Bls12381G2AddSample, Bls12381G2MsmRun,
+        Bls12381G2MsmSample, Bls12381G2MulRun, Bls12381G2MulSample,
+        Bls12381G2ProjectiveToAffineRun, Bls12381G2ProjectiveToAffineSample, Bls12381G2ValidateRun,
+        Bls12381G2ValidateSample, Bls12381HashToG1Run, Bls12381HashToG1Sample, Bls12381HashToG2Run,
+        Bls12381HashToG2Sample, Bls12381MapFp2ToG2Run, Bls12381MapFp2ToG2Sample,
+        Bls12381MapFpToG1Run, Bls12381MapFpToG1Sample, Bls12381PairingRun, Bls12381PairingSample,
     },
-    Host,
+    xdr::ContractCostType,
+    Host, TryIntoVal, U256Val, U256,
 };
+
+pub(crate) struct Bls12381EncodeFpMeasure;
+impl HostCostMeasurement for Bls12381EncodeFpMeasure {
+    type Runner = Bls12381EncodeFpRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381EncodeFpSample {
+        let buf = vec![0; 1000];
+        let fp = Fq::rand(rng);
+        Bls12381EncodeFpSample(buf, fp)
+    }
+}
+pub(crate) struct Bls12381DecodeFpMeasure;
+impl HostCostMeasurement for Bls12381DecodeFpMeasure {
+    type Runner = Bls12381DecodeFpRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381DecodeFpSample {
+        let mut buf = vec![];
+        let _ = Fq::rand(rng).serialize_uncompressed(&mut buf).unwrap();
+        Bls12381DecodeFpSample(buf)
+    }
+}
+pub(crate) struct Bls12381G1ValidateMeasure;
+impl HostCostMeasurement for Bls12381G1ValidateMeasure {
+    type Runner = Bls12381G1ValidateRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1ValidateSample {
+        Bls12381G1ValidateSample(G1Affine::rand(rng), ContractCostType::Bls12381G1Validate)
+    }
+}
+pub(crate) struct Bls12381G2ValidateMeasure;
+impl HostCostMeasurement for Bls12381G2ValidateMeasure {
+    type Runner = Bls12381G2ValidateRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2ValidateSample {
+        Bls12381G2ValidateSample(G2Affine::rand(rng), ContractCostType::Bls12381G2Validate)
+    }
+}
+pub(crate) struct Bls12381FrFromU256Measure;
+impl HostCostMeasurement for Bls12381FrFromU256Measure {
+    type Runner = Bls12381FrFromU256Run;
+
+    fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrFromU256Sample {
+        let mut buf = [0; 32];
+        rng.fill_bytes(&mut buf);
+        let u = U256::from_be_bytes(buf);
+        let val: U256Val = u.try_into_val(host).unwrap();
+        Bls12381FrFromU256Sample(val)
+    }
+}
+pub(crate) struct Bls12381FrToU256Measure;
+impl HostCostMeasurement for Bls12381FrToU256Measure {
+    type Runner = Bls12381FrToU256Run;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrToU256Sample {
+        Bls12381FrToU256Sample(Fr::rand(rng))
+    }
+}
+pub(crate) struct Bls12381FrAddMeasure;
+impl HostCostMeasurement for Bls12381FrAddMeasure {
+    type Runner = Bls12381FrAddRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrAddSubMulSample {
+        Bls12381FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+pub(crate) struct Bls12381FrSubMeasure;
+impl HostCostMeasurement for Bls12381FrSubMeasure {
+    type Runner = Bls12381FrSubRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrAddSubMulSample {
+        Bls12381FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+pub(crate) struct Bls12381FrMulMeasure;
+impl HostCostMeasurement for Bls12381FrMulMeasure {
+    type Runner = Bls12381FrMulRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrAddSubMulSample {
+        Bls12381FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+pub(crate) struct Bls12381FrPowMeasure;
+impl HostCostMeasurement for Bls12381FrPowMeasure {
+    type Runner = Bls12381FrPowRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381FrPowSample {
+        assert!(input <= 64);
+        let rhs = if input == 64 {
+            u64::MAX
+        } else {
+            (1 << input) -1
+        };
+        Bls12381FrPowSample(Fr::rand(rng), rhs)
+    }
+}
+pub(crate) struct Bls12381FrInvMeasure;
+impl HostCostMeasurement for Bls12381FrInvMeasure {
+    type Runner = Bls12381FrInvRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381FrInvSample {
+        Bls12381FrInvSample(Fr::rand(rng))
+    }
+}
 
 pub(crate) struct Bls12381G1AddMeasure;
 
@@ -195,75 +300,5 @@ impl HostCostMeasurement for Bls12381PairingMeasure {
                 .map(|_| G2Affine::rand(rng))
                 .collect(),
         )
-    }
-}
-
-pub(crate) struct Bls12381G1AffineSerializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381G1AffineSerializeUncompressedMeasure {
-    type Runner = Bls12381G1AffineSerializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> G1Affine {
-        G1Affine::rand(rng)
-    }
-}
-pub(crate) struct Bls12381G2AffineSerializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381G2AffineSerializeUncompressedMeasure {
-    type Runner = Bls12381G2AffineSerializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> G2Affine {
-        G2Affine::rand(rng)
-    }
-}
-pub(crate) struct Bls12381Fp12SerializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381Fp12SerializeUncompressedMeasure {
-    type Runner = Bls12381Fp12SerializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Fq12 {
-        Fq12::rand(rng)
-    }
-}
-pub(crate) struct Bls12381FpSerializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381FpSerializeUncompressedMeasure {
-    type Runner = Bls12381FpSerializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Fq {
-        Fq::rand(rng)
-    }
-}
-
-pub(crate) struct Bls12381G1AffineDeserializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381G1AffineDeserializeUncompressedMeasure {
-    type Runner = Bls12381G1AffineDeserializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let mut buf = vec![];
-        let _ = G1Affine::rand(rng)
-            .serialize_uncompressed(&mut buf)
-            .unwrap();
-        buf
-    }
-}
-pub(crate) struct Bls12381G2AffineDeserializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381G2AffineDeserializeUncompressedMeasure {
-    type Runner = Bls12381G2AffineDeserializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let mut buf = vec![];
-        let _ = G2Affine::rand(rng)
-            .serialize_uncompressed(&mut buf)
-            .unwrap();
-        buf
-    }
-}
-pub(crate) struct Bls12381FpDeserializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381FpDeserializeUncompressedMeasure {
-    type Runner = Bls12381FpDeserializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let mut buf = vec![];
-        let _ = Fq::rand(rng).serialize_uncompressed(&mut buf).unwrap();
-        buf
-    }
-}
-pub(crate) struct Bls12381Fp2DeserializeUncompressedMeasure;
-impl HostCostMeasurement for Bls12381Fp2DeserializeUncompressedMeasure {
-    type Runner = Bls12381Fp2DeserializeUncompressedRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let mut buf = vec![];
-        let _ = Fq2::rand(rng).serialize_uncompressed(&mut buf).unwrap();
-        buf
     }
 }
