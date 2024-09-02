@@ -62,6 +62,35 @@ pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:
 // | Bls12381G2Msm            |    7226943  |  336724933  |   |         1806736                          24051781  |
 // | Bls12381Pairing          |    9852690  |  586227065  |   |         2463173                          41873362  |
 
+
+// | Cost Type                     | CPU (const) | CPU (lin) | MEM (const) | MEM (lin) |
+// |:------------------------------|------------:|----------:|------------:|----------:|
+// | Bls12381EncodeFp              |     661     |           |             |           |
+// | Bls12381DecodeFp              |     985     |           |             |           |
+// | Bls12381G1Validate            |    732,301  |           |             |           |
+// | Bls12381G2Validate            |  1,063,432   |           |             |           |
+// | Bls12381G1ProjectiveToAffine  |   92,642  |           |             |           |
+// | Bls12381G2ProjectiveToAffine  |   100,742   |           |             |           |
+// | Bls12381G1Add                 |    7,689    |           |             |           |
+// | Bls12381G1Mul                 |  2,458,985  |           |             |           |
+// | Bls12381MapFpToG1             |   1,541,554 |           |    5552    |           |
+// | Bls12381G2Add                 |    25,207   |           |             |           |
+// | Bls12381G2Mul                 |   7,873,219  |           |             |           |
+// | Bls12381MapFp2ToG2            |   2,420,202  |           |   3344      |           |
+// | Bls12381FrFromU256            |    1,994   |           |             |           |
+// | Bls12381FrToU256              |    1,155  |           |      248    |           |
+// | Bls12381FrAddSub              |     74      |           |             |           |
+// | Bls12381FrMul                 |     332     |           |             |           |
+// | Bls12381FrInv                 |    35,421   |           |             |           |
+
+
+// | Bls12381G1Msm                 |             |           |             |           |
+// | Bls12381HashToG1              |             |           |             |           |
+// | Bls12381G2Msm                 |             |           |             |           |
+// | Bls12381HashToG2              |             |           |             |           |
+// | Bls12381FrPow                 |             |           |             |           |
+// | Bls12381Pairing               |             |           |             |           |
+
 impl Host {
     // This is the internal routine performing deserialization on various
     // element types, which can be conceptually decomposed into units of Fp

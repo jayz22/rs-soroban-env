@@ -196,10 +196,11 @@ pub(crate) struct Bls12381HashToG1Measure;
 
 impl HostCostMeasurement for Bls12381HashToG1Measure {
     type Runner = Bls12381HashToG1Run;
+    const STEP_SIZE: u64 = 64;
 
-    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381HashToG1Sample {
-        let len = rng.gen_range(0..1000) as usize;
-        let mut msg = vec![0u8; len];
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381HashToG1Sample {
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
+        let mut msg = vec![0u8; len as usize];
         rng.fill(msg.as_mut_slice());
         Bls12381HashToG1Sample(msg)
     }
