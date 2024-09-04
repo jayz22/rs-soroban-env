@@ -26,16 +26,11 @@ use sha2::Sha256;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Mul, MulAssign, SubAssign};
 
-const FP_SERIALIZED_SIZE: usize = 48;
-const FP2_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
-const G1_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
-const G2_SERIALIZED_SIZE: usize = FP2_SERIALIZED_SIZE * 2;
-const FR_SERIALIZED_SIZE: usize = 32;
-// Domain Separation Tags specified according to https://datatracker.ietf.org/doc/rfc9380/
-// section 3.1, 8.8
-// TODO: double check also verify it with Riad and Iftach
-pub const BLS12381_G1_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
-pub const BLS12381_G2_DST: &'static str = "Soroban-V00-CS00-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
+pub(crate) const FP_SERIALIZED_SIZE: usize = 48;
+pub(crate) const FP2_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
+pub(crate) const G1_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
+pub(crate) const G2_SERIALIZED_SIZE: usize = FP2_SERIALIZED_SIZE * 2;
+pub(crate) const FR_SERIALIZED_SIZE: usize = 32;
 
 impl Host {
     // This is the internal routine performing deserialization on various
@@ -455,13 +450,17 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g1_internal(&self, msg: &[u8]) -> Result<G1Affine, HostError> {
+    pub(crate) fn hash_to_g1_internal(
+        &self,
+        domain: &[u8],
+        msg: &[u8],
+    ) -> Result<G1Affine, HostError> {
         self.charge_budget(ContractCostType::Bls12381HashToG1, Some(msg.len() as u64))?;
         let g1_mapper = MapToCurveBasedHasher::<
             Projective<g1::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g1::Config>,
-        >::new(BLS12381_G1_DST.as_bytes())
+        >::new(domain)
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -555,13 +554,17 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g2_internal(&self, msg: &[u8]) -> Result<G2Affine, HostError> {
+    pub(crate) fn hash_to_g2_internal(
+        &self,
+        domain: &[u8],
+        msg: &[u8],
+    ) -> Result<G2Affine, HostError> {
         self.charge_budget(ContractCostType::Bls12381HashToG2, Some(msg.len() as u64))?;
         let mapper = MapToCurveBasedHasher::<
             Projective<g2::Config>,
             DefaultFieldHasher<Sha256, 128>,
             WBMap<g2::Config>,
-        >::new(BLS12381_G2_DST.as_bytes())
+        >::new(domain)
         .map_err(|e| {
             self.err(
                 ScErrorType::Crypto,

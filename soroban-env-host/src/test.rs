@@ -3,7 +3,7 @@ pub(crate) mod observe;
 mod address;
 mod auth;
 mod basic;
-// mod bls;
+mod bls12_381;
 mod budget_metering;
 mod bytes;
 mod complex;

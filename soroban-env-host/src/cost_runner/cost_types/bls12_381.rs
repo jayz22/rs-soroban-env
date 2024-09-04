@@ -2,7 +2,18 @@ use ark_bls12_381::{Bls12_381, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2
 use ark_ec::pairing::PairingOutput;
 
 use crate::{
-    cost_runner::{CostRunner, CostType}, impl_const_cost_runner_for_bls_consume_sample, impl_const_cost_runner_for_bls_deref_sample, impl_lin_cost_runner_for_bls_deref_sample, xdr::ContractCostType::{self, Bls12381DecodeFp, Bls12381EncodeFp, Bls12381FrAddSub, Bls12381FrFromU256, Bls12381FrInv, Bls12381FrMul, Bls12381FrPow, Bls12381FrToU256, Bls12381G1Add, Bls12381G1Msm, Bls12381G1Mul, Bls12381G1ProjectiveToAffine, Bls12381G1Validate, Bls12381G2Add, Bls12381G2Msm, Bls12381G2Mul, Bls12381G2ProjectiveToAffine, Bls12381G2Validate, Bls12381HashToG1, Bls12381HashToG2, Bls12381MapFp2ToG2, Bls12381MapFpToG1, Bls12381Pairing}, U256Val 
+    cost_runner::{CostRunner, CostType},
+    impl_const_cost_runner_for_bls_consume_sample, impl_const_cost_runner_for_bls_deref_sample,
+    impl_lin_cost_runner_for_bls_deref_sample,
+    xdr::ContractCostType::{
+        self, Bls12381DecodeFp, Bls12381EncodeFp, Bls12381FrAddSub, Bls12381FrFromU256,
+        Bls12381FrInv, Bls12381FrMul, Bls12381FrPow, Bls12381FrToU256, Bls12381G1Add,
+        Bls12381G1Msm, Bls12381G1Mul, Bls12381G1ProjectiveToAffine, Bls12381G1Validate,
+        Bls12381G2Add, Bls12381G2Msm, Bls12381G2Mul, Bls12381G2ProjectiveToAffine,
+        Bls12381G2Validate, Bls12381HashToG1, Bls12381HashToG2, Bls12381MapFp2ToG2,
+        Bls12381MapFpToG1, Bls12381Pairing,
+    },
+    U256Val,
 };
 use std::hint::black_box;
 
@@ -42,7 +53,7 @@ pub struct Bls12381G1MsmSample(pub Vec<G1Affine>, pub Vec<Fr>);
 #[derive(Clone)]
 pub struct Bls12381MapFpToG1Sample(pub Fq);
 #[derive(Clone)]
-pub struct Bls12381HashToG1Sample(pub Vec<u8>);
+pub struct Bls12381HashToG1Sample(pub Vec<u8>, pub Vec<u8>);
 #[derive(Clone)]
 pub struct Bls12381G2ProjectiveToAffineSample(pub G2Projective);
 #[derive(Clone)]
@@ -54,7 +65,7 @@ pub struct Bls12381G2MsmSample(pub Vec<G2Affine>, pub Vec<Fr>);
 #[derive(Clone)]
 pub struct Bls12381MapFp2ToG2Sample(pub Fq2);
 #[derive(Clone)]
-pub struct Bls12381HashToG2Sample(pub Vec<u8>);
+pub struct Bls12381HashToG2Sample(pub Vec<u8>, pub Vec<u8>);
 #[derive(Clone)]
 pub struct Bls12381PairingSample(pub Vec<G1Affine>, pub Vec<G2Affine>);
 #[derive(Clone)]
@@ -186,6 +197,7 @@ impl_lin_cost_runner_for_bls_deref_sample!(
     hash_to_g1_internal,
     Bls12381HashToG1Sample,
     G1Affine,
+    domain,
     msg
 );
 impl_lin_cost_runner_for_bls_deref_sample!(
@@ -194,6 +206,7 @@ impl_lin_cost_runner_for_bls_deref_sample!(
     hash_to_g2_internal,
     Bls12381HashToG2Sample,
     G2Affine,
+    domain,
     msg
 );
 
@@ -268,7 +281,11 @@ impl CostRunner for Bls12381DecodeFpRun {
 
     type RecycledType = (Option<Self::SampleType>, Option<Fq>);
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Bls12381DecodeFpSample) -> Self::RecycledType {
+    fn run_iter(
+        host: &crate::Host,
+        _iter: u64,
+        sample: Bls12381DecodeFpSample,
+    ) -> Self::RecycledType {
         let Bls12381DecodeFpSample(buf) = &sample;
         let res = host
             .deserialize_uncompessed_no_validate(buf, 1, "test")

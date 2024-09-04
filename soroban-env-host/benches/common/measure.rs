@@ -98,15 +98,15 @@ impl Measurements {
         let ymin = points.iter().map(|(_, y)| *y).reduce(f32::min).unwrap();
         let ymax = points.iter().map(|(_, y)| *y).reduce(f32::max).unwrap();
         let ymean = points.iter().map(|(_, y)| *y).sum::<f32>() / points.len().max(1) as f32;
-        let mut ystd = points.iter().map(|(_, y)| (*y - ymean) * (*y - ymean)).sum::<f32>() / points.len().max(1) as f32;
+        let mut ystd = points
+            .iter()
+            .map(|(_, y)| (*y - ymean) * (*y - ymean))
+            .sum::<f32>()
+            / points.len().max(1) as f32;
         ystd = ystd.sqrt();
 
         if ymin == ymax {
-            println!(
-                "{} output: min == max == {}",
-                out_name,
-                ymin
-            );            
+            println!("{} output: min == max == {}", out_name, ymin);
             return;
         }
         let hist = textplots::utils::histogram(&points, ymin, ymax, 30);

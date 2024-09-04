@@ -2976,8 +2976,13 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         mo: BytesObject,
+        dst: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let g1 = self.visit_obj(mo, |msg: &ScBytes| self.hash_to_g1_internal(msg.as_slice()))?;
+        let g1 = self.visit_obj(mo, |msg: &ScBytes| {
+            self.visit_obj(dst, |dst: &ScBytes| {
+                self.hash_to_g1_internal(dst.as_slice(), msg.as_slice())
+            })
+        })?;
         self.g1_affine_serialize_uncompressed(g1)
     }
 
@@ -3041,9 +3046,12 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         msg: BytesObject,
+        dst: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let g2 = self.visit_obj(msg, |msg: &ScBytes| {
-            self.hash_to_g2_internal(msg.as_slice())
+            self.visit_obj(dst, |dst: &ScBytes| {
+                self.hash_to_g2_internal(dst.as_slice(), msg.as_slice())
+            })
         })?;
         self.g2_affine_serialize_uncompressed(g2)
     }

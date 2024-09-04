@@ -112,7 +112,7 @@ impl HostCostMeasurement for Bls12381FrPowMeasure {
         let rhs = if input == 64 {
             u64::MAX
         } else {
-            (1 << input) -1
+            (1 << input) - 1
         };
         Bls12381FrPowSample(Fr::rand(rng), rhs)
     }
@@ -200,9 +200,10 @@ impl HostCostMeasurement for Bls12381HashToG1Measure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381HashToG1Sample {
         let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
+        let domain = "SOROBAN-V01-CS01-with-BLS12381G1_XMD:SHA-256_SSWU_RO_".as_bytes().to_vec();
         let mut msg = vec![0u8; len as usize];
         rng.fill(msg.as_mut_slice());
-        Bls12381HashToG1Sample(msg)
+        Bls12381HashToG1Sample(domain, msg)
     }
 }
 
@@ -280,9 +281,10 @@ impl HostCostMeasurement for Bls12381HashToG2Measure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381HashToG2Sample {
         let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
+        let domain = "SOROBAN-V01-CS01-with-BLS12381G2_XMD:SHA-256_SSWU_RO_".as_bytes().to_vec();
         let mut msg = vec![0u8; len as usize];
         rng.fill(msg.as_mut_slice());
-        Bls12381HashToG2Sample(msg)
+        Bls12381HashToG2Sample(domain, msg)
     }
 }
 
