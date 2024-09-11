@@ -11,6 +11,7 @@ use ark_ff::UniformRand;
 use ark_serialize::CanonicalSerialize;
 use hex::FromHex;
 use rand::{rngs::StdRng, SeedableRng};
+use serde::Deserialize;
 use std::cmp::Ordering;
 
 enum InvalidPointTypes {
@@ -22,8 +23,6 @@ enum InvalidPointTypes {
     PointNotOnCurve,
     PointNotInSubgroup,
 }
-
-use serde::Deserialize;
 
 #[allow(unused)]
 #[derive(Deserialize, Debug)]
@@ -225,7 +224,7 @@ fn parse_g2_point_test_case(host: &Host, p: Point) -> Result<BytesObject, HostEr
     let mut p_bytes = [0u8; 192];
     // the input point format in each coordinate is (c0,c1), each part
     // being a hex string starting '0x'. So we need to split it by comma,
-    // reverse the order, and parse each part (each part is already
+    // flip the two parts, and parse each part (each part is already
     // big-endian, so all we need to do is to strip the prefix)
     let qx: Vec<_> = p.x.split(',').collect();
     let qy: Vec<_> = p.y.split(',').collect();
@@ -1266,12 +1265,10 @@ fn pairing() -> Result<(), HostError> {
     Ok(())
 }
 
+// ethereum test
+
 // fr arithmetics
 
 // serialization roundtrip
-
-// bls signature
-
-// ethereum test
 
 // fuzzing tests
