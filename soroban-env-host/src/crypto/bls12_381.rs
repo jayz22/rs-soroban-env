@@ -107,9 +107,8 @@ impl Host {
         match flags {
             0b0100_0000 => {
                 // infinite bit is set, check all other bits are zero
-                let mut expected_bytes = [0; EXPECTED_SIZE];
-                expected_bytes[0] = flags;
-                if bytes != expected_bytes {
+                let is_valid = bytes[0] == 0b0100_0000 && bytes[1..].iter().all(|x| x.is_zero());
+                if !is_valid {
                     Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {msg} deserialize: infinity flag (bit 1) is set while remaining bits are not all zero").as_str(), &[]))
                 } else {
                     Ok(())
@@ -287,6 +286,11 @@ impl Host {
 
     pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
         self.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
+        // The `into_bigint` carries the majority of the cost. It performs the
+        // Montgomery reduction on the internal representation, which is doing a
+        // number of wrapping arithmetics on each u64 word (`Fr` contains 4
+        // words). The core routine is in `ark_ff::MontConfig::into_bigint`,
+        // this cannot panic.
         let bytes: [u8; 32] = scalar
             .into_bigint()
             .to_bytes_be()
@@ -329,7 +333,7 @@ impl Host {
                 return Err(self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "bls12-381 quadradic extention field element (Fp2): invalid input length to deserialize",
+                    "bls12-381 quadradic extension field element (Fp2): invalid input length to deserialize",
                     &[
                         Val::from_u32(bytes.len() as u32).into(),
                         Val::from_u32(expected_size as u32).into(),
