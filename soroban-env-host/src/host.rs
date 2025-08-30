@@ -2892,6 +2892,16 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components.
+    fn compute_hash_sha512(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let hash = self.sha512_hash_from_bytesobj_input(x)?;
+        self.add_host_object(self.scbytes_from_vec(hash)?)
+    }
+
+    // Notes on metering: covered by components.
     fn compute_hash_keccak256(
         &self,
         _vmcaller: &mut VmCaller<Host>,

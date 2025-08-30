@@ -57,6 +57,48 @@ fn sha256_test() {
 }
 
 #[test]
+fn sha512_test() {
+    let host = observe_host!(Host::test_host());
+    let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {
+        let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
+        let hash_obj = host.compute_hash_sha512(bytes_obj)?;
+        host.visit_obj(hash_obj, |bytes: &crate::xdr::ScBytes| {
+            Ok(bytes.as_slice().to_vec())
+        })
+    };
+    // Empty string
+    assert_eq!(
+        compute_hash(&[]).unwrap().encode_hex::<String>(),
+        "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e".to_string()
+    );
+    // Single byte [1]
+    assert_eq!(
+        compute_hash(&[1]).unwrap().encode_hex::<String>(),
+        "7b54b66836c1fbdd13d2441d9e1434dc62ca677fb68f5fe66a464baadecdbd00576f8d6b5ac3bcc80844b7d50b1cc6603444bbe7cfcf8fc0aa1ee3c636d9e339".to_string()
+    );
+    // String "test vector for soroban"
+    assert_eq!(
+        compute_hash(b"test vector for soroban")
+            .unwrap()
+            .encode_hex::<String>(),
+        "6d4e7ca8020ae8d9da82c3f64b7bf78ebab725e7b9a65861ff301eac292dd240e775f33734e4a9c70a242456ac4e19c2ab43a1f4e4f102c4e5a8ad2dc7297341".to_string()
+    );
+    let long_vec = vec![1u8; 1_000_000];
+    assert_eq!(
+        compute_hash(long_vec.as_slice())
+            .unwrap()
+            .encode_hex::<String>(),
+        "1a32b7c186fac5b7492c2fc74a081382b05c07e6adb30e583a25f16053e55fdbba0dbce00449c70554a12be6f8a57244bb4115f6b21a705e27d94c862b3be86a".to_string()
+    );
+
+    host.budget_ref().reset_default().unwrap();
+    let too_long_vec = vec![1u8; 10_000_000];
+    assert!(is_budget_exceeded(
+        compute_hash(too_long_vec.as_slice()).err().unwrap()
+    ));
+}
+
+#[test]
 fn keccak256_test() {
     let host = observe_host!(Host::test_host());
     let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {

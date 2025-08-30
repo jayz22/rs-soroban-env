@@ -11,7 +11,7 @@ use hex_literal::hex;
 use hmac::{Hmac, Mac};
 use rand::RngCore;
 use rand_chacha::ChaCha20Rng;
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
 use sha3::Keccak256;
 
 use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
@@ -266,6 +266,25 @@ impl Host {
         })
     }
 
+    // SHA512 functions
+    pub(crate) fn sha512_hash_from_bytesobj_input(
+        &self,
+        x: BytesObject,
+    ) -> Result<Vec<u8>, HostError> {
+        self.visit_obj(x, |bytes: &ScBytes| {
+            let hash = sha512_hash_from_bytes(bytes.as_slice(), self)?;
+            if hash.len() != 64 {
+                return Err(err!(
+                    self,
+                    (ScErrorType::Object, ScErrorCode::UnexpectedSize),
+                    "expected 64-byte BytesObject for sha512 hash, got different size",
+                    hash.len()
+                ));
+            }
+            Ok(hash)
+        })
+    }
+
     // Keccak256/SHA3 functions
     pub(crate) fn keccak256_hash_from_bytes_raw(
         &self,
@@ -322,6 +341,27 @@ pub(crate) fn sha256_hash_from_bytes(
 ) -> Result<Vec<u8>, HostError> {
     Vec::<u8>::charge_bulk_init_cpy(32, budget.clone())?;
     sha256_hash_from_bytes_raw(bytes, budget).map(|x| x.to_vec())
+}
+
+pub(crate) fn sha512_hash_from_bytes_raw(
+    bytes: &[u8],
+    budget: impl AsBudget,
+) -> Result<[u8; 64], HostError> {
+    let _span = tracy_span!("sha512");
+    // TODO: Use ComputeSha512Hash cost type when available, for now use SHA256 cost type
+    budget.as_budget().charge(
+        ContractCostType::ComputeSha256Hash,
+        Some(bytes.len() as u64),
+    )?;
+    Ok(<Sha512 as sha2::Digest>::digest(bytes).into())
+}
+
+pub(crate) fn sha512_hash_from_bytes(
+    bytes: &[u8],
+    budget: impl AsBudget,
+) -> Result<Vec<u8>, HostError> {
+    Vec::<u8>::charge_bulk_init_cpy(64, budget.clone())?;
+    sha512_hash_from_bytes_raw(bytes, budget).map(|x| x.to_vec())
 }
 
 pub(crate) fn chacha20_fill_bytes(
