@@ -5,6 +5,10 @@ use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
     builtin_contracts::common_types::AddressExecutable,
+    crypto::bulletproof::{
+        bulletproof_verify_multiple_values_in_range, commitments_from_vec_object,
+        range_proof_from_bytes,
+    },
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
@@ -3149,6 +3153,46 @@ impl VmCallerEnv for Host {
         let lhs = self.fr_from_u256val(lhs)?;
         let res = self.fr_inv_internal(&lhs)?;
         self.fr_to_u256val(res)
+    }
+
+    fn bulletproof_verify_multiple_values_in_range(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        proof_bytes: BytesObject,
+        dst: BytesObject,
+        nbits: U32Val,
+        commitments: VecObject,
+    ) -> Result<Void, Self::Error> {
+        // Parse the proof from bytes
+        let proof = range_proof_from_bytes(self, proof_bytes)?;
+
+        // Parse the domain separation tag (dst)
+        let dst_bytes = self.visit_obj(dst, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))?;
+
+        // Convert nbits to usize
+        let nbits_usize = u32::from(nbits) as usize;
+        if !matches!(nbits_usize, 8 | 16 | 32 | 64) {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "nbits must be 8, 16, 32, or 64",
+                &[nbits.to_val()],
+            ));
+        }
+
+        // Parse commitments from vector of BytesObjects
+        let value_commitments = commitments_from_vec_object(self, commitments)?;
+
+        // Perform the verification
+        bulletproof_verify_multiple_values_in_range(
+            self,
+            &proof,
+            dst_bytes,
+            nbits_usize,
+            &value_commitments,
+        )?;
+
+        Ok(Val::VOID.into())
     }
 
     // endregion: "crypto" module functions

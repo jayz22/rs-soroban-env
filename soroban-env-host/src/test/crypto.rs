@@ -461,3 +461,128 @@ fn test_secp256r1_signature_verification() -> Result<(), HostError> {
 
     Ok(())
 }
+
+/// Bulletproof range proof tests
+#[test]
+fn bulletproof_verify_invalid_nbits() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.set_base_prng_seed([0; 32])?;
+
+    // Create dummy objects
+    let proof_obj = host.bytes_new_from_slice(&[0u8; 64])?;
+    let dst_obj = host.bytes_new_from_slice(b"test")?;
+    let commitments_vec = host.vec_new()?;
+
+    // Test with invalid nbits - bulletproof verification will fail
+    let result = host.bulletproof_verify_multiple_values_in_range(
+        proof_obj,
+        dst_obj,
+        U32Val::from(15), // This will cause bulletproof verification to fail
+        commitments_vec,
+    );
+
+    match result {
+        Err(e) => {
+            assert!(is_crypto_error(e));
+        }
+        Ok(_) => panic!("Should have failed with invalid proof/nbits combination"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn bulletproof_verify_empty_commitments() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.set_base_prng_seed([0; 32])?;
+
+    // Create dummy objects
+    let proof_obj = host.bytes_new_from_slice(&[0u8; 64])?;
+    let dst_obj = host.bytes_new_from_slice(b"test")?;
+    let commitments_vec = host.vec_new()?; // Empty vector
+
+    // Test with empty commitments
+    let result = host.bulletproof_verify_multiple_values_in_range(
+        proof_obj,
+        dst_obj,
+        U32Val::from(32),
+        commitments_vec,
+    );
+
+    match result {
+        Err(e) => {
+            assert!(is_crypto_error(e));
+        }
+        Ok(_) => panic!("Should have failed with empty commitments"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn bulletproof_verify_invalid_proof_bytes() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.set_base_prng_seed([0; 32])?;
+
+    // Create invalid proof bytes (too short)
+    let proof_obj = host.bytes_new_from_slice(&[0u8; 10])?;
+    let dst_obj = host.bytes_new_from_slice(b"test")?;
+
+    // Create a dummy commitment (32 bytes)
+    let commitment_bytes = [1u8; 32];
+    let commitment_obj = host.bytes_new_from_slice(&commitment_bytes)?;
+    let commitments_vec = host.vec_new()?;
+    let commitments_vec = host.vec_push_back(commitments_vec, commitment_obj.into())?;
+
+    // Test with invalid proof bytes
+    let result = host.bulletproof_verify_multiple_values_in_range(
+        proof_obj,
+        dst_obj,
+        U32Val::from(32),
+        commitments_vec,
+    );
+
+    match result {
+        Err(e) => {
+            assert!(is_crypto_error(e));
+        }
+        Ok(_) => panic!("Should have failed with invalid proof bytes"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn bulletproof_verify_invalid_commitment_size() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.set_base_prng_seed([0; 32])?;
+
+    // Create dummy proof
+    let proof_obj = host.bytes_new_from_slice(&[0u8; 64])?;
+    let dst_obj = host.bytes_new_from_slice(b"test")?;
+
+    // Create invalid commitment (wrong size - should be 32 bytes)
+    let commitment_bytes = [1u8; 20]; // Wrong size
+    let commitment_obj = host.bytes_new_from_slice(&commitment_bytes)?;
+    let commitments_vec = host.vec_new()?;
+    let commitments_vec = host.vec_push_back(commitments_vec, commitment_obj.into())?;
+
+    // Test with invalid commitment size
+    let result = host.bulletproof_verify_multiple_values_in_range(
+        proof_obj,
+        dst_obj,
+        U32Val::from(32),
+        commitments_vec,
+    );
+
+    match result {
+        Err(e) => {
+            assert!(is_crypto_error(e));
+        }
+        Ok(_) => panic!("Should have failed with invalid commitment size"),
+    }
+
+    Ok(())
+}
+
+// TODO: add proper tests for bulletproof. The above ones are all tivial ones testing invalid inputs.

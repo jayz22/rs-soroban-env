@@ -256,6 +256,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "bulletproofs"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "012e2e5f88332083bd4235d445ae78081c00b2558443821a9ca5adfe1070073d"
+dependencies = [
+ "byteorder",
+ "clear_on_drop",
+ "curve25519-dalek",
+ "digest",
+ "group",
+ "merlin",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_derive",
+ "sha3",
+ "subtle",
+ "thiserror",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -266,6 +287,12 @@ name = "bytemuck"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
+
+[[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes-lit"
@@ -316,6 +343,15 @@ dependencies = [
  "num-traits",
  "serde",
  "windows-targets 0.48.5",
+]
+
+[[package]]
+name = "clear_on_drop"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38508a63f4979f0048febc9966fadbd48e5dab31fd0ec6a3f151bbf4a74f7423"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -394,7 +430,10 @@ dependencies = [
  "curve25519-dalek-derive",
  "digest",
  "fiat-crypto",
+ "group",
+ "rand_core",
  "rustc_version",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -963,6 +1002,17 @@ name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+
+[[package]]
+name = "merlin"
+version = "3.0.0"
+source = "git+https://github.com/aptos-labs/merlin.git#3454ccc85e37355c729ba40e6dac6e867ddf59f5"
+dependencies = [
+ "byteorder",
+ "keccak",
+ "rand_core",
+ "zeroize",
+]
 
 [[package]]
 name = "miniz_oxide"
@@ -1587,6 +1637,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "backtrace",
+ "bulletproofs",
  "bytes-lit",
  "curve25519-dalek",
  "ecdsa",
@@ -1601,6 +1652,7 @@ dependencies = [
  "itertools",
  "k256",
  "lstsq",
+ "merlin",
  "more-asserts",
  "nalgebra",
  "num-derive",

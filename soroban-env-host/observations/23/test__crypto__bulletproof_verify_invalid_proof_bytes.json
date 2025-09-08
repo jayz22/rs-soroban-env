@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(10)": "cpu:14488, prngs:-/ed310798",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15453, mem:106, objs:-/1@6a801b37",
+  "   3 call bytes_new_from_slice(4)": "",
+  "   4 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:16416, mem:206, objs:-/2@1348f646",
+  "   5 call bytes_new_from_slice(32)": "",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:17387, mem:334, objs:-/3@3d260b47",
+  "   7 call vec_new()": "",
+  "   8 ret vec_new -> Ok(Vec(obj#7))": "cpu:17890, mem:414, objs:-/4@fef23d8b",
+  "   9 call vec_push_back(Vec(obj#7), Bytes(obj#5))": "",
+  "  10 ret vec_push_back -> Ok(Vec(obj#9))": "cpu:19099, mem:518, objs:-/5@9544b4bc",
+  "  11 call bulletproof_verify_multiple_values_in_range(Bytes(obj#1), Bytes(obj#3), U32(32), Vec(obj#9))": "",
+  "  12 ret bulletproof_verify_multiple_values_in_range -> Err(Error(Crypto, InvalidInput))": "cpu:19386",
+  "  13 end": "cpu:19386, mem:518, prngs:-/ed310798, objs:-/5@9544b4bc, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
