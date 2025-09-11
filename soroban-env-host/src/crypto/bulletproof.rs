@@ -107,7 +107,7 @@ pub(crate) fn commitments_from_vec_object(
 pub(crate) fn bulletproof_verify_multiple_values_in_range(
     host: &Host,
     proof: &RangeProof,
-    dst: Vec<u8>,
+    dst: &[u8],
     nbits: usize,
     value_commitments: &[CompressedRistretto],
 ) -> Result<(), HostError> {
@@ -124,7 +124,7 @@ pub(crate) fn bulletproof_verify_multiple_values_in_range(
 
     host.with_current_prng(|prng| {
         // Use the provided domain separation tag for bulletproof verification
-        let mut transcript = Transcript::new(dst.as_slice());
+        let mut transcript = Transcript::new(dst);
 
         proof
             .verify_multiple_with_rng(

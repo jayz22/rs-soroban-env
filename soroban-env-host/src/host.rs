@@ -3184,15 +3184,15 @@ impl VmCallerEnv for Host {
         let value_commitments = commitments_from_vec_object(self, commitments)?;
 
         // Perform the verification
-        bulletproof_verify_multiple_values_in_range(
+        let res = bulletproof_verify_multiple_values_in_range(
             self,
             &proof,
-            dst_bytes,
+            dst_bytes.as_slice(),
             nbits_usize,
             &value_commitments,
         )?;
 
-        Ok(Val::VOID.into())
+        Ok(res.into())
     }
 
     // endregion: "crypto" module functions
