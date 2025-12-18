@@ -1604,6 +1604,159 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256, U256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256, U256Val, Int256Shift);
 
+    fn u256_mod_add(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U256Val,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.bls12_381_fr_add(vmcaller, lhs, rhs)
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            let mut lhs_fr = self.bn254_fr_from_u256val(lhs)?;
+            let rhs_fr = self.bn254_fr_from_u256val(rhs)?;
+            self.bn254_fr_add_internal(&mut lhs_fr, &rhs_fr)?;
+            self.bn254_fr_to_u256val(lhs_fr)
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_add: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
+    fn u256_mod_sub(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U256Val,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.bls12_381_fr_sub(vmcaller, lhs, rhs)
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            let mut lhs_fr = self.bn254_fr_from_u256val(lhs)?;
+            let rhs_fr = self.bn254_fr_from_u256val(rhs)?;
+            self.bn254_fr_sub_internal(&mut lhs_fr, &rhs_fr)?;
+            self.bn254_fr_to_u256val(lhs_fr)
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_sub: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
+    fn u256_mod_mul(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U256Val,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.bls12_381_fr_mul(vmcaller, lhs, rhs)
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            let mut lhs_fr = self.bn254_fr_from_u256val(lhs)?;
+            let rhs_fr = self.bn254_fr_from_u256val(rhs)?;
+            self.bn254_fr_mul_internal(&mut lhs_fr, &rhs_fr)?;
+            self.bn254_fr_to_u256val(lhs_fr)
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_mul: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
+    fn u256_mod_pow(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U64Val,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.bls12_381_fr_pow(vmcaller, lhs, rhs)
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            let lhs_fr = self.bn254_fr_from_u256val(lhs)?;
+            let rhs_u64: u64 = rhs.try_into_val(self)?;
+            let res = self.bn254_fr_pow_internal(&lhs_fr, &rhs_u64)?;
+            self.bn254_fr_to_u256val(res)
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_pow: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
+    fn u256_mod_inv(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.bls12_381_fr_inv(vmcaller, lhs)
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            let lhs_fr = self.bn254_fr_from_u256val(lhs)?;
+            let res = self.bn254_fr_inv_internal(&lhs_fr)?;
+            self.bn254_fr_to_u256val(res)
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_inv: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
+    fn u256_mod_inner_product(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        vec_a: VecObject,
+        vec_b: VecObject,
+        field: Symbol,
+    ) -> Result<U256Val, Self::Error> {
+        let _ = (vec_a, vec_b); // Suppress unused warnings
+
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            // TODO: implement BLS12-381 Fr field inner product
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "u256_mod_inner_product not yet implemented",
+                &[],
+            ))
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            // TODO: implement BN254 Fr field inner product
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "u256_mod_inner_product not yet implemented",
+                &[],
+            ))
+        } else {
+            Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "u256_mod_inner_product: invalid field type, must be 'BLS12_381' or 'BN254'",
+                &[field.to_val()],
+            ))
+        }
+    }
+
     impl_bignum_host_fns!(i256_add, checked_add, I256, I256Val, Int256AddSub);
     impl_bignum_host_fns!(i256_sub, checked_sub, I256, I256Val, Int256AddSub);
     impl_bignum_host_fns!(i256_mul, checked_mul, I256, I256Val, Int256Mul);
@@ -3362,6 +3515,19 @@ impl VmCallerEnv for Host {
                 &[field.to_val()],
             ))
         }
+    }
+
+    fn bn254_g1_msm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        vp: VecObject,
+        vs: VecObject,
+    ) -> Result<BytesObject, HostError> {
+        let points = self.bn254_checked_g1_vec_from_vecobj(vp)?;
+        let scalars = self.bn254_fr_vec_from_vecobj(vs)?;
+        // TODO: use Bn254G1Msm cost type when available
+        let res = self.msm_internal(&points, &scalars, &ContractCostType::Bls12381G1Msm, "BN254 G1")?;
+        self.bn254_g1_projective_serialize_uncompressed(res)
     }
 
     // endregion: "crypto" module functions

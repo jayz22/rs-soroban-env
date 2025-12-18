@@ -1,12 +1,12 @@
 use crate::{
     crypto::bn254::{BN254_G1_SERIALIZED_SIZE, BN254_G2_SERIALIZED_SIZE},
     xdr::{ScErrorCode, ScErrorType},
-    BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val,
-    {ConversionError, TryFromVal, U256},
+    BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, Symbol, U256Val, U32Val,
+    U64Val, {ConversionError, TryFromVal, U256},
 };
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{BigInteger, PrimeField, UniformRand};
+use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
 use ark_serialize::CanonicalSerialize;
 use core::panic;
 use rand::{rngs::StdRng, SeedableRng};
@@ -1124,6 +1124,593 @@ fn ethereum_bn254_pairing_tests() -> Result<(), HostError> {
             "Test {} failed",
             name
         );
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests for bn254_g1_msm and u256_mod_* functions
+// ============================================================================
+
+fn bn254_symbol(_host: &Host) -> Result<Symbol, HostError> {
+    Ok(Symbol::try_from_small_str("BN254")?)
+}
+
+// Helper to compare two U256Val values via their Fr representation
+fn u256val_eq(host: &Host, a: U256Val, b: U256Val) -> Result<bool, HostError> {
+    let a_fr = host.bn254_fr_from_u256val(a)?;
+    let b_fr = host.bn254_fr_from_u256val(b)?;
+    Ok(a_fr == b_fr)
+}
+
+fn sample_fr_vec(host: &Host, count: usize, rng: &mut StdRng) -> Result<crate::VecObject, HostError> {
+    let mut vals = Vec::with_capacity(count);
+    for _ in 0..count {
+        vals.push(sample_fr(host, rng)?.to_val());
+    }
+    host.vec_new_from_slice(&vals)
+}
+
+fn sample_g1_vec(host: &Host, count: usize, rng: &mut StdRng) -> Result<crate::VecObject, HostError> {
+    let mut vals = Vec::with_capacity(count);
+    for _ in 0..count {
+        vals.push(sample_g1(host, rng)?.to_val());
+    }
+    host.vec_new_from_slice(&vals)
+}
+
+#[test]
+fn test_bn254_g1_msm() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x42; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+
+    // 1. Empty vectors - should error
+    {
+        let vp = host.vec_new()?;
+        let vs = host.vec_new()?;
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_msm(vp, vs),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. Mismatched lengths - should error
+    {
+        let vp = sample_g1_vec(&host, 2, &mut rng)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_msm(vp, vs),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 3. Invalid G1 point (not on curve) - should error
+    {
+        let vp = host.vec_new_from_slice(&[
+            sample_g1(&host, &mut rng)?.to_val(),
+            invalid_g1(&host, InvalidPointTypes::PointNotOnCurve, &mut rng)?.to_val(),
+        ])?;
+        let vs = sample_fr_vec(&host, 2, &mut rng)?;
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_msm(vp, vs),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 4. Zero points vector - result should be zero
+    {
+        let vp = host.vec_new_from_slice(&[g1_zero(&host)?.to_val(); 3])?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+        assert_eq!(
+            host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // 5. Zero scalars vector - result should be zero
+    {
+        let vp = sample_g1_vec(&host, 3, &mut rng)?;
+        let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 3])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+        assert_eq!(
+            host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // 6. p*1 + (-p)*1 = 0 (cancellation test)
+    {
+        let pt = sample_g1(&host, &mut rng)?;
+        let neg_pt = minus_g1(pt.clone(), &host)?;
+        let vp = host.vec_new_from_slice(&[pt.to_val(), neg_pt.to_val()])?;
+        let vs = host.vec_new_from_slice(&[U256Val::from_u32(1).to_val(); 2])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+        assert_eq!(
+            host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // 7. G1 * (r-1) = -G1 (large scalar test, where r is Fr order)
+    {
+        let generator = host.bn254_g1_affine_serialize_uncompressed(&G1Affine::generator())?;
+        let neg_generator = minus_g1(generator.clone(), &host)?;
+
+        // r - 1 in Fr
+        let r_minus_1 = Fr::from(0u64) - Fr::from(1u64);
+        let r_minus_1_val = fr_to_u256val(&host, r_minus_1)?;
+
+        let vp = host.vec_new_from_slice(&[generator.to_val()])?;
+        let vs = host.vec_new_from_slice(&[r_minus_1_val.to_val()])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+
+        assert_eq!(
+            host.obj_cmp(res.into(), neg_generator.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // 8. G1 * 2 computed using MSM should equal G1 + G1
+    {
+        let generator = host.bn254_g1_affine_serialize_uncompressed(&G1Affine::generator())?;
+        let two_g1 = host.bn254_g1_add(generator.clone(), generator.clone())?;
+
+        let vp = host.vec_new_from_slice(&[generator.to_val()])?;
+        let vs = host.vec_new_from_slice(&[U256Val::from_u32(2).to_val()])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+
+        assert_eq!(
+            host.obj_cmp(res.into(), two_g1.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_mod_add_bn254() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x43; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let field = bn254_symbol(&host)?;
+
+    // 1. Invalid field symbol - should error
+    {
+        let invalid_field = Symbol::try_from_small_str("INVALID")?;
+        let a = U256Val::from_u32(1);
+        let b = U256Val::from_u32(2);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_add(a, b, invalid_field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. Identity: a + 0 = a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let zero = U256Val::from_u32(0);
+        let res = host.u256_mod_add(a, zero, field)?;
+        assert!(u256val_eq(&host, res, a)?);
+    }
+
+    // 3. Commutativity: a + b = b + a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let a_plus_b = host.u256_mod_add(a, b, field)?;
+        let b_plus_a = host.u256_mod_add(b, a, field)?;
+        assert!(u256val_eq(&host, a_plus_b, b_plus_a)?);
+    }
+
+    // 4. Associativity: (a + b) + c = a + (b + c)
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let c = sample_fr(&host, &mut rng)?;
+        let ab = host.u256_mod_add(a, b, field)?;
+        let ab_c = host.u256_mod_add(ab, c, field)?;
+        let bc = host.u256_mod_add(b, c, field)?;
+        let a_bc = host.u256_mod_add(a, bc, field)?;
+        assert!(u256val_eq(&host, ab_c, a_bc)?);
+    }
+
+    // 5. Hardcoded: 2 + 3 = 5
+    {
+        let two = U256Val::from_u32(2);
+        let three = U256Val::from_u32(3);
+        let five = U256Val::from_u32(5);
+        let res = host.u256_mod_add(two, three, field)?;
+        assert!(u256val_eq(&host, res, five)?);
+    }
+
+    // 6. Large number wrapping: (r-1) + 1 = 0
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let one = U256Val::from_u32(1);
+        let zero = U256Val::from_u32(0);
+        let res = host.u256_mod_add(r_minus_1, one, field)?;
+        assert!(u256val_eq(&host, res, zero)?);
+    }
+
+    // 7. Large number wrapping: (r-1) + 2 = 1
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let two = U256Val::from_u32(2);
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_add(r_minus_1, two, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 8. Large number wrapping: (r-1) + (r-1) = r-2
+    {
+        let r_minus_1 = Fr::from(0u64) - Fr::from(1u64);
+        let r_minus_2 = Fr::from(0u64) - Fr::from(2u64);
+        let r_minus_1_val = fr_to_u256val(&host, r_minus_1)?;
+        let r_minus_2_val = fr_to_u256val(&host, r_minus_2)?;
+        let res = host.u256_mod_add(r_minus_1_val, r_minus_1_val, field)?;
+        assert!(u256val_eq(&host, res, r_minus_2_val)?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_mod_sub_bn254() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x44; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let field = bn254_symbol(&host)?;
+
+    // 1. Invalid field symbol - should error
+    {
+        let invalid_field = Symbol::try_from_small_str("INVALID")?;
+        let a = U256Val::from_u32(5);
+        let b = U256Val::from_u32(3);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_sub(a, b, invalid_field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. Identity: a - 0 = a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let zero = U256Val::from_u32(0);
+        let res = host.u256_mod_sub(a, zero, field)?;
+        assert!(u256val_eq(&host, res, a)?);
+    }
+
+    // 3. Self subtraction: a - a = 0
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let zero = U256Val::from_u32(0);
+        let res = host.u256_mod_sub(a, a, field)?;
+        assert!(u256val_eq(&host, res, zero)?);
+    }
+
+    // 4. Hardcoded: 5 - 3 = 2
+    {
+        let five = U256Val::from_u32(5);
+        let three = U256Val::from_u32(3);
+        let two = U256Val::from_u32(2);
+        let res = host.u256_mod_sub(five, three, field)?;
+        assert!(u256val_eq(&host, res, two)?);
+    }
+
+    // 5. Large number wrapping: 0 - 1 = r - 1
+    {
+        let zero = U256Val::from_u32(0);
+        let one = U256Val::from_u32(1);
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let res = host.u256_mod_sub(zero, one, field)?;
+        assert!(u256val_eq(&host, res, r_minus_1)?);
+    }
+
+    // 6. Large number wrapping: 3 - 5 = r - 2
+    {
+        let three = U256Val::from_u32(3);
+        let five = U256Val::from_u32(5);
+        let r_minus_2 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(2u64))?;
+        let res = host.u256_mod_sub(three, five, field)?;
+        assert!(u256val_eq(&host, res, r_minus_2)?);
+    }
+
+    // 7. No wrap: (r-1) - (r-2) = 1
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let r_minus_2 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(2u64))?;
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_sub(r_minus_1, r_minus_2, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_mod_mul_bn254() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x45; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let field = bn254_symbol(&host)?;
+
+    // 1. Invalid field symbol - should error
+    {
+        let invalid_field = Symbol::try_from_small_str("INVALID")?;
+        let a = U256Val::from_u32(2);
+        let b = U256Val::from_u32(3);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_mul(a, b, invalid_field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. Identity: a * 1 = a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_mul(a, one, field)?;
+        assert!(u256val_eq(&host, res, a)?);
+    }
+
+    // 3. Zero: a * 0 = 0
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let zero = U256Val::from_u32(0);
+        let res = host.u256_mod_mul(a, zero, field)?;
+        assert!(u256val_eq(&host, res, zero)?);
+    }
+
+    // 4. Commutativity: a * b = b * a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let a_times_b = host.u256_mod_mul(a, b, field)?;
+        let b_times_a = host.u256_mod_mul(b, a, field)?;
+        assert!(u256val_eq(&host, a_times_b, b_times_a)?);
+    }
+
+    // 5. Associativity: (a * b) * c = a * (b * c)
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let c = sample_fr(&host, &mut rng)?;
+        let ab = host.u256_mod_mul(a, b, field)?;
+        let ab_c = host.u256_mod_mul(ab, c, field)?;
+        let bc = host.u256_mod_mul(b, c, field)?;
+        let a_bc = host.u256_mod_mul(a, bc, field)?;
+        assert!(u256val_eq(&host, ab_c, a_bc)?);
+    }
+
+    // 6. Hardcoded: 2 * 3 = 6
+    {
+        let two = U256Val::from_u32(2);
+        let three = U256Val::from_u32(3);
+        let six = U256Val::from_u32(6);
+        let res = host.u256_mod_mul(two, three, field)?;
+        assert!(u256val_eq(&host, res, six)?);
+    }
+
+    // 7. Hardcoded: 7 * 11 = 77
+    {
+        let seven = U256Val::from_u32(7);
+        let eleven = U256Val::from_u32(11);
+        let seventy_seven = U256Val::from_u32(77);
+        let res = host.u256_mod_mul(seven, eleven, field)?;
+        assert!(u256val_eq(&host, res, seventy_seven)?);
+    }
+
+    // 8. Large number wrapping: (r-1) * 2 = r - 2 (i.e., -1 * 2 = -2 mod r)
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let two = U256Val::from_u32(2);
+        let r_minus_2 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(2u64))?;
+        let res = host.u256_mod_mul(r_minus_1, two, field)?;
+        assert!(u256val_eq(&host, res, r_minus_2)?);
+    }
+
+    // 9. Large number wrapping: (r-1) * (r-1) = 1 (i.e., (-1) * (-1) = 1)
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_mul(r_minus_1, r_minus_1, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 10. Distributivity: a * (b + c) = a*b + a*c
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let c = sample_fr(&host, &mut rng)?;
+        let b_plus_c = host.u256_mod_add(b, c, field)?;
+        let a_times_bplusc = host.u256_mod_mul(a, b_plus_c, field)?;
+        let ab = host.u256_mod_mul(a, b, field)?;
+        let ac = host.u256_mod_mul(a, c, field)?;
+        let ab_plus_ac = host.u256_mod_add(ab, ac, field)?;
+        assert!(u256val_eq(&host, a_times_bplusc, ab_plus_ac)?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_mod_pow_bn254() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x46; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let field = bn254_symbol(&host)?;
+
+    // 1. Invalid field symbol - should error
+    {
+        let invalid_field = Symbol::try_from_small_str("INVALID")?;
+        let a = U256Val::from_u32(2);
+        let exp = U64Val::from_u32(10);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_pow(a, exp, invalid_field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. a^0 = 1 (for non-zero a)
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let zero_exp = U64Val::from_u32(0);
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_pow(a, zero_exp, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 3. a^1 = a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let one_exp = U64Val::from_u32(1);
+        let res = host.u256_mod_pow(a, one_exp, field)?;
+        assert!(u256val_eq(&host, res, a)?);
+    }
+
+    // 4. a^2 = a * a
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let two_exp = U64Val::from_u32(2);
+        let a_squared = host.u256_mod_mul(a, a, field)?;
+        let res = host.u256_mod_pow(a, two_exp, field)?;
+        assert!(u256val_eq(&host, res, a_squared)?);
+    }
+
+    // 5. Hardcoded: 2^10 = 1024
+    {
+        let two = U256Val::from_u32(2);
+        let ten_exp = U64Val::from_u32(10);
+        let expected = U256Val::from_u32(1024);
+        let res = host.u256_mod_pow(two, ten_exp, field)?;
+        assert!(u256val_eq(&host, res, expected)?);
+    }
+
+    // 6. Hardcoded: 3^5 = 243
+    {
+        let three = U256Val::from_u32(3);
+        let five_exp = U64Val::from_u32(5);
+        let expected = U256Val::from_u32(243);
+        let res = host.u256_mod_pow(three, five_exp, field)?;
+        assert!(u256val_eq(&host, res, expected)?);
+    }
+
+    // 7. Large number wrapping: (r-1)^2 = 1 (since (r-1) = -1, and (-1)^2 = 1)
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let two_exp = U64Val::from_u32(2);
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_pow(r_minus_1, two_exp, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 8. Large number wrapping: (r-1)^3 = r-1 (since (-1)^3 = -1)
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let three_exp = U64Val::from_u32(3);
+        let res = host.u256_mod_pow(r_minus_1, three_exp, field)?;
+        assert!(u256val_eq(&host, res, r_minus_1)?);
+    }
+
+    // 9. Large exponent: 2^255 mod r
+    {
+        let two = U256Val::from_u32(2);
+        let large_exp = U64Val::from_u32(255);
+        // Compute expected using arkworks
+        let expected_fr = Fr::from(2u64).pow([255u64]);
+        let expected = fr_to_u256val(&host, expected_fr)?;
+        let res = host.u256_mod_pow(two, large_exp, field)?;
+        assert!(u256val_eq(&host, res, expected)?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_mod_inv_bn254() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x47; 32]);
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let field = bn254_symbol(&host)?;
+
+    // 1. Invalid field symbol - should error
+    {
+        let invalid_field = Symbol::try_from_small_str("INVALID")?;
+        let a = U256Val::from_u32(2);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_inv(a, invalid_field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 2. Zero inversion - should error
+    {
+        let zero = U256Val::from_u32(0);
+        assert!(HostError::result_matches_err(
+            host.u256_mod_inv(zero, field),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // 3. 1^(-1) = 1
+    {
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_inv(one, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 4. Property: a * a^(-1) = 1
+    {
+        let a = sample_fr(&host, &mut rng)?;
+        let a_inv = host.u256_mod_inv(a, field)?;
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_mul(a, a_inv, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 5. Hardcoded: 2^(-1) computed and verified
+    {
+        let two = U256Val::from_u32(2);
+        let two_inv = host.u256_mod_inv(two, field)?;
+        // Verify: 2 * 2^(-1) = 1
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_mul(two, two_inv, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+
+        // Also verify against arkworks computation
+        let expected_inv = fr_to_u256val(&host, Fr::from(2u64).inverse().unwrap())?;
+        assert!(u256val_eq(&host, two_inv, expected_inv)?);
+    }
+
+    // 6. (r-1)^(-1) = r-1 (since -1 is its own inverse)
+    {
+        let r_minus_1 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(1u64))?;
+        let res = host.u256_mod_inv(r_minus_1, field)?;
+        assert!(u256val_eq(&host, res, r_minus_1)?);
+    }
+
+    // 7. (r-2)^(-1) computed and verified: (r-2) * inv = 1
+    {
+        let r_minus_2 = fr_to_u256val(&host, Fr::from(0u64) - Fr::from(2u64))?;
+        let r_minus_2_inv = host.u256_mod_inv(r_minus_2, field)?;
+        let one = U256Val::from_u32(1);
+        let res = host.u256_mod_mul(r_minus_2, r_minus_2_inv, field)?;
+        assert!(u256val_eq(&host, res, one)?);
+    }
+
+    // 8. Large random value: verify a * a^(-1) = 1
+    {
+        for _ in 0..5 {
+            let a = sample_fr(&host, &mut rng)?;
+            let a_inv = host.u256_mod_inv(a, field)?;
+            let one = U256Val::from_u32(1);
+            let res = host.u256_mod_mul(a, a_inv, field)?;
+            assert!(u256val_eq(&host, res, one)?);
+        }
     }
 
     Ok(())
