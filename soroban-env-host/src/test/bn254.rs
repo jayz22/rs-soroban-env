@@ -1128,3 +1128,47 @@ fn ethereum_bn254_pairing_tests() -> Result<(), HostError> {
 
     Ok(())
 }
+
+#[test]
+fn u256_wrapped_value_to_fr() -> Result<(), HostError> {
+    let host = Host::test_host();
+    host.enable_debug()?;
+
+    // Input hex value (this is larger than the bn254 Fr modulus, so it will wrap)
+    let input_hex = "30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001";
+    
+    // Convert hex string to bytes
+    let input_bytes = hex::decode(input_hex).unwrap();
+    
+    // Create BytesObject from the input bytes
+    let bytes_obj = host.test_bin_obj(&input_bytes)?;
+    
+    // Convert BytesObject to U256Val
+    let lhs = host.u256_val_from_be_bytes(bytes_obj)?;
+    let rhs = U256Val::from_u32(3);
+    let extra = U256Val::from_u32(123);
+
+    let prod = host.u256_mul(lhs, rhs)?;
+    let u256_val = host.u256_add(prod, extra)?;
+    let unreduced_bytes = host.u256_val_to_be_bytes(u256_val.clone())?;    
+    let mut unreduced_result_bytes = [0u8; 32];
+    host.bytes_copy_to_slice(unreduced_bytes, U32Val::from(0), &mut unreduced_result_bytes)?;
+    println!("Unreduced Output: 0x{}", hex::encode(&unreduced_result_bytes));
+
+    // Convert U256Val to bn254 Fr (this will reduce modulo the field prime)
+    let fr = host.bn254_fr_from_u256val(u256_val)?;
+    
+    // Convert Fr back to U256Val to get the reduced value
+    let reduced_u256 = fr_to_u256val(&host, fr)?;
+    
+    // Convert U256Val to bytes
+    let result_bytes_obj = host.u256_val_to_be_bytes(reduced_u256)?;
+    let mut result_bytes = [0u8; 32];
+    host.bytes_copy_to_slice(result_bytes_obj, U32Val::from(0), &mut result_bytes)?;
+    
+    // Print the result in hex format
+    println!("Input:  0x{}", input_hex);
+    println!("Output: 0x{}", hex::encode(&result_bytes));
+    
+    Ok(())
+}
