@@ -660,6 +660,28 @@ impl Host {
         0
     }
 
+    /// Execute a closure with access to the current frame's arena allocator.
+    /// The arena is valid for the duration of the closure and is freed when
+    /// the frame is popped.
+    ///
+    /// Returns an error if no frame is active.
+    #[allow(dead_code)]
+    pub(crate) fn with_frame_arena<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(&bumpalo::Bump) -> Result<T, HostError>,
+    {
+        let stack = self.try_borrow_context_stack()?;
+        match stack.last() {
+            Some(ctx) => f(&ctx.frame_arena),
+            None => Err(self.err(
+                crate::xdr::ScErrorType::Context,
+                crate::xdr::ScErrorCode::InternalError,
+                "no frame active for arena access",
+                &[],
+            )),
+        }
+    }
+
     pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
         self.0.budget.charge(ty, input)
     }
