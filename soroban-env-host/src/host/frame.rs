@@ -90,11 +90,23 @@ impl TestContractFrame {
 
 /// Context pairs a variable-case [`Frame`] enum with state that's common to all
 /// cases (eg. a [`Prng`]).
-#[derive(Clone, Hash)]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
+    /// Per-frame arena allocator for frame-local allocations.
+    /// Memory allocated here is freed when the frame is popped.
+    pub(crate) frame_arena: bumpalo::Bump,
+}
+
+// Manual Hash impl that excludes frame_arena (which doesn't implement Hash)
+impl std::hash::Hash for Context {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.frame.hash(state);
+        self.prng.hash(state);
+        self.storage.hash(state);
+        // frame_arena is intentionally excluded from hashing
+    }
 }
 
 pub(crate) struct CallParams {
@@ -427,6 +439,7 @@ impl Host {
             frame,
             prng: None,
             storage: None,
+            frame_arena: bumpalo::Bump::new(),
         };
         let rp = self.push_context(ctx)?;
         {

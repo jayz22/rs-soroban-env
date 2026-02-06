@@ -823,7 +823,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1767593, 684);
+    let (expected_insns, expected_write_bytes) = (1767597, 684); // +4 for frame_arena creation
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -861,7 +861,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 1093647;
+    let expected_instructions = 1093651;
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1385,7 +1385,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 639602,
+            instructions: 639606,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -1528,7 +1528,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1046760,
+            instructions: 1046764,
             disk_read_bytes: 0,
             write_bytes: 176,
         }
@@ -1590,7 +1590,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 641049,
+            instructions: 641053,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -2029,7 +2029,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 791047,
+            instructions: 791055,
             disk_read_bytes: 0,
             write_bytes: 80,
         }
@@ -2098,7 +2098,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 902901,
+            instructions: 902909,
             disk_read_bytes: 0,
             write_bytes: 0,
         }
@@ -2397,7 +2397,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1562621,
+            instructions: 1562629,
             disk_read_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
@@ -2535,7 +2535,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 921385,
+            instructions: 921393,
             disk_read_bytes: data_entry_size + instance_entry_size,
             write_bytes: data_entry_size + instance_entry_size,
         }
@@ -2678,7 +2678,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1444181,
+            instructions: 1444189,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
@@ -2810,7 +2810,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1561476,
+            instructions: 1561484,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: wasm_entry_size + instance_entry_size,
         }
@@ -2930,7 +2930,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 read_only: vec![cd.contract_key.clone()].try_into().unwrap(),
                 read_write: vec![data_key, cd.wasm_key.clone()].try_into().unwrap(),
             },
-            instructions: 1563649,
+            instructions: 1563657,
             disk_read_bytes: wasm_entry_size,
             write_bytes: wasm_entry_size + temp_entry_size,
         }

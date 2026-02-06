@@ -642,10 +642,21 @@ impl Host {
         &self.0.arena
     }
 
-    /// Get the number of bytes allocated in the arena.
+    /// Get the number of bytes allocated in the host arena.
     /// Useful for tracking memory usage during execution.
     pub fn arena_allocated_bytes(&self) -> usize {
         self.0.arena.allocated_bytes()
+    }
+
+    /// Get the number of bytes allocated in the current frame's arena.
+    /// Returns 0 if no frame is active.
+    pub fn frame_arena_allocated_bytes(&self) -> usize {
+        if let Ok(stack) = self.0.context_stack.try_borrow() {
+            if let Some(ctx) = stack.last() {
+                return ctx.frame_arena.allocated_bytes();
+            }
+        }
+        0
     }
 
     pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
