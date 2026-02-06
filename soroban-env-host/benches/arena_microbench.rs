@@ -2,6 +2,7 @@
 //!
 //! Run: cargo bench --features bench -p soroban-env-host --bench arena_microbench -- --nocapture
 
+use bumpalo::Bump;
 use std::time::Instant;
 
 const ITERATIONS: usize = 10_000;
@@ -43,6 +44,66 @@ fn bench_std_vec_reuse() {
     }
 }
 
+fn bench_bumpalo_slice() {
+    println!("\n=== Bumpalo Arena Allocation (slice) ===");
+    for &size in &SIZES {
+        // Create a fresh arena for each size test
+        let bump = Bump::with_capacity(ITERATIONS * size);
+        let start = Instant::now();
+        for _ in 0..ITERATIONS {
+            let slice: &mut [u8] = bump.alloc_slice_fill_default(size);
+            std::hint::black_box(slice);
+        }
+        let elapsed = start.elapsed();
+        println!(
+            "Size {:>5}: {:>8} ns/alloc",
+            size,
+            elapsed.as_nanos() / ITERATIONS as u128
+        );
+    }
+}
+
+fn bench_bumpalo_vec() {
+    println!("\n=== Bumpalo Arena Vec Allocation ===");
+    for &size in &SIZES {
+        use bumpalo::collections::Vec as BumpVec;
+        // Create a fresh arena for each size test
+        let bump = Bump::with_capacity(ITERATIONS * size);
+        let start = Instant::now();
+        for _ in 0..ITERATIONS {
+            let mut v: BumpVec<u8> = BumpVec::with_capacity_in(size, &bump);
+            v.extend(std::iter::repeat(0u8).take(size));
+            std::hint::black_box(&v);
+        }
+        let elapsed = start.elapsed();
+        println!(
+            "Size {:>5}: {:>8} ns/alloc",
+            size,
+            elapsed.as_nanos() / ITERATIONS as u128
+        );
+    }
+}
+
+fn bench_bumpalo_reset() {
+    println!("\n=== Bumpalo Arena with Reset (simulating per-invocation) ===");
+    for &size in &SIZES {
+        let mut bump = Bump::with_capacity(size * 10);
+        let start = Instant::now();
+        for _ in 0..ITERATIONS {
+            let slice: &mut [u8] = bump.alloc_slice_fill_default(size);
+            std::hint::black_box(slice);
+            // Reset the arena - this is what happens between invocations
+            bump.reset();
+        }
+        let elapsed = start.elapsed();
+        println!(
+            "Size {:>5}: {:>8} ns/alloc+reset",
+            size,
+            elapsed.as_nanos() / ITERATIONS as u128
+        );
+    }
+}
+
 fn main() {
     println!("=== Arena Allocation Microbenchmark ===");
     println!("Iterations: {}", ITERATIONS);
@@ -50,8 +111,11 @@ fn main() {
 
     bench_std_vec();
     bench_std_vec_reuse();
+    bench_bumpalo_slice();
+    bench_bumpalo_vec();
+    bench_bumpalo_reset();
 
-    // Note: After Stage 1, arena benchmarks will be added here.
-    // Currently this establishes baseline for standard allocation patterns.
-    println!("\n(Bumpalo benchmark will be added after Stage 1)");
+    println!("\n=== Summary ===");
+    println!("Arena allocation should be faster than standard allocation");
+    println!("for repeated small allocations due to reduced syscall overhead.");
 }

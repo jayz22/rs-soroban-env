@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
@@ -87,8 +88,12 @@ pub struct CoverageScoreboard {
 // The soroban 25.x host only supports protocol 25 and later.
 pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 25;
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct HostImpl {
+    // Arena allocator for host-side memory allocations.
+    // This arena is used for allocating host objects and other transient data
+    // that lives for the duration of a Host invocation.
+    arena: Bump,
     module_cache: RefCell<Option<ModuleCache>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
@@ -354,6 +359,7 @@ impl Host {
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
+            arena: Bump::new(),
             module_cache: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
@@ -627,6 +633,19 @@ impl Host {
 
     pub fn budget_cloned(&self) -> Budget {
         self.0.budget.clone()
+    }
+
+    /// Get a reference to the host's arena allocator.
+    /// The arena is used for allocating host objects and other transient data.
+    #[allow(dead_code)]
+    pub(crate) fn arena(&self) -> &Bump {
+        &self.0.arena
+    }
+
+    /// Get the number of bytes allocated in the arena.
+    /// Useful for tracking memory usage during execution.
+    pub fn arena_allocated_bytes(&self) -> usize {
+        self.0.arena.allocated_bytes()
     }
 
     pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
