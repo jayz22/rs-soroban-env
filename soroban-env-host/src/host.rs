@@ -24,6 +24,7 @@ use crate::{
     TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
+pub(crate) mod arena_alloc;
 mod comparison;
 mod conversion;
 mod data_helper;
