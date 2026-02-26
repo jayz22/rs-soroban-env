@@ -1985,3 +1985,179 @@ fn g2_is_on_curve() -> Result<(), HostError> {
 
     Ok(())
 }
+
+// Helper: increment a big-endian byte slice by 1 (wrapping)
+fn be_add_one(bytes: &mut [u8]) {
+    for b in bytes.iter_mut().rev() {
+        let (val, overflow) = b.overflowing_add(1);
+        *b = val;
+        if !overflow {
+            return;
+        }
+    }
+}
+
+#[test]
+fn fp_overflow_is_rejected() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    let modulus_bytes = parse_hex(&MODULUS);
+
+    // Fp = modulus (exactly p, not a valid field element since range is [0, p-1])
+    {
+        let fp = host.bytes_new_from_slice(&modulus_bytes)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp_to_g1(fp),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // Fp = modulus + 1
+    {
+        let mut buf = modulus_bytes.clone();
+        be_add_one(&mut buf);
+        let fp = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp_to_g1(fp),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // Fp = all 0xFF (maximum 48-byte value)
+    {
+        let buf = [0xFF; FP_SERIALIZED_SIZE];
+        let fp = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp_to_g1(fp),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn fp2_overflow_is_rejected() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    let modulus_bytes = parse_hex(&MODULUS);
+    let zeros = [0u8; FP_SERIALIZED_SIZE];
+
+    // Fp2 format is: be_bytes(c1) || be_bytes(c0) (96 bytes total)
+
+    // c1 = modulus, c0 = 0
+    {
+        let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&modulus_bytes);
+        buf[FP_SERIALIZED_SIZE..].copy_from_slice(&zeros);
+        let fp2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp2_to_g2(fp2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // c1 = 0, c0 = modulus
+    {
+        let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&zeros);
+        buf[FP_SERIALIZED_SIZE..].copy_from_slice(&modulus_bytes);
+        let fp2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp2_to_g2(fp2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // both components = modulus
+    {
+        let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&modulus_bytes);
+        buf[FP_SERIALIZED_SIZE..].copy_from_slice(&modulus_bytes);
+        let fp2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp2_to_g2(fp2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // c1 = all 0xFF, c0 = 0
+    {
+        let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&[0xFF; FP_SERIALIZED_SIZE]);
+        buf[FP_SERIALIZED_SIZE..].copy_from_slice(&zeros);
+        let fp2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp2_to_g2(fp2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn g1_with_overflow_fp_coordinate_is_rejected() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    let modulus_bytes = parse_hex(&MODULUS);
+
+    // Construct a G1 point (96 bytes: X || Y) where X overflows the modulus
+    {
+        let mut buf = [0u8; G1_SERIALIZED_SIZE];
+        // X = modulus (overflows), Y = 0
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&modulus_bytes);
+        let g1 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(g1),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(g1, g1),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // Y overflows
+    {
+        let mut buf = [0u8; G1_SERIALIZED_SIZE];
+        // X = 0, Y = modulus (overflows)
+        buf[FP_SERIALIZED_SIZE..].copy_from_slice(&modulus_bytes);
+        let g1 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(g1),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn g2_with_overflow_fp2_coordinate_is_rejected() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    let modulus_bytes = parse_hex(&MODULUS);
+
+    // G2 point is 192 bytes: X_c1 (48) || X_c0 (48) || Y_c1 (48) || Y_c0 (48)
+    // Overflow in X.c1
+    {
+        let mut buf = [0u8; G2_SERIALIZED_SIZE];
+        buf[..FP_SERIALIZED_SIZE].copy_from_slice(&modulus_bytes);
+        let g2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(g2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(g2, g2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // Overflow in Y.c0
+    {
+        let mut buf = [0u8; G2_SERIALIZED_SIZE];
+        buf[3 * FP_SERIALIZED_SIZE..].copy_from_slice(&modulus_bytes);
+        let g2 = host.bytes_new_from_slice(&buf)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(g2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    Ok(())
+}
