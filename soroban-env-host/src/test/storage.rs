@@ -842,3 +842,73 @@ mod ttl_extension_v2_tests {
         assert_eq!(extend(ContractTtlExtension::Code, 10000), (0, 500));
     }
 }
+
+mod ttl_extension_v1_overflow_tests {
+    use super::*;
+    use crate::xdr::{
+        ContractDataEntry, ExtensionPoint, LedgerEntry, LedgerEntryData, LedgerEntryExt,
+    };
+
+    const SEQ: u32 = 1000;
+    const MAX_ENTRY_TTL: u32 = 100_000;
+    #[cfg(feature = "next")]
+    const MAX_LIVE_UNTIL: u32 = SEQ + MAX_ENTRY_TTL - 1;
+
+    // A host holding a single persistent contract-data entry whose TTL has just
+    // run down to zero (`live_until == SEQ`)
+    fn setup() -> (Host, Rc<LedgerKey>) {
+        let host = Host::test_host_with_recording_footprint();
+        host.set_ledger_info(crate::LedgerInfo {
+            protocol_version: Host::current_test_protocol(),
+            sequence_number: SEQ,
+            max_entry_ttl: MAX_ENTRY_TTL,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let contract = ScAddress::Contract(ContractId([0; 32].into()));
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: contract.clone(),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Persistent,
+        }));
+        let entry = Rc::new(LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data: LedgerEntryData::ContractData(ContractDataEntry {
+                contract,
+                key: ScVal::I32(0),
+                val: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                ext: ExtensionPoint::V0,
+            }),
+            ext: LedgerEntryExt::V0,
+        });
+        host.with_mut_storage(|s| s.put(&key, &entry, Some(SEQ), &host, None))
+            .unwrap();
+        (host, key)
+    }
+
+    fn extend(host: &Host, key: &Rc<LedgerKey>, extend_to: u32) -> Result<(), HostError> {
+        host.with_mut_storage(|s| s.extend_ttl(host, key.clone(), 0, extend_to, None))
+    }
+
+    fn live_until(host: &Host, key: &Rc<LedgerKey>) -> u32 {
+        host.with_mut_storage(|s| Ok(s.get_with_live_until_ledger(key, host, None)?.1.unwrap()))
+            .unwrap()
+    }
+
+    #[test]
+    fn extend_ttl_within_bounds_is_unaffected() {
+        let (host, key) = setup();
+        extend(&host, &key, 5000).unwrap();
+        assert_eq!(live_until(&host, &key), SEQ + 5000);
+    }
+
+    #[cfg(feature = "next")]
+    #[test]
+    fn extend_ttl_with_huge_extend_to_clamps_to_network_max() {
+        let (host, key) = setup();
+        extend(&host, &key, u32::MAX).unwrap();
+        assert_eq!(live_until(&host, &key), MAX_LIVE_UNTIL);
+    }
+}

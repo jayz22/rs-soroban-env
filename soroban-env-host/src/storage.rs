@@ -607,6 +607,13 @@ impl Storage {
 
         let ttl_ext_info = self.prepare_extend_ttl(host, &key, extend_to, key_val)?;
 
+        // Saturating is safe because the result is immediately clamped to
+        // `max_live_until` below
+        #[cfg(feature = "next")]
+        let mut new_live_until =
+            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
+
+        #[cfg(not(feature = "next"))]
         let mut new_live_until = host.with_ledger_info(|li| {
             li.sequence_number.checked_add(extend_to).ok_or_else(|| {
                 // overflowing here means a misconfiguration of the network (the
