@@ -851,7 +851,6 @@ mod ttl_extension_v1_overflow_tests {
 
     const SEQ: u32 = 1000;
     const MAX_ENTRY_TTL: u32 = 100_000;
-    #[cfg(feature = "next")]
     const MAX_LIVE_UNTIL: u32 = SEQ + MAX_ENTRY_TTL - 1;
 
     // A host holding a single persistent contract-data entry whose TTL has just
@@ -904,7 +903,6 @@ mod ttl_extension_v1_overflow_tests {
         assert_eq!(live_until(&host, &key), SEQ + 5000);
     }
 
-    #[cfg(feature = "next")]
     #[test]
     fn extend_ttl_with_huge_extend_to_clamps_to_network_max() {
         let (host, key) = setup();

@@ -609,23 +609,8 @@ impl Storage {
 
         // Saturating is safe because the result is immediately clamped to
         // `max_live_until` below
-        #[cfg(feature = "next")]
         let mut new_live_until =
             host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
-
-        #[cfg(not(feature = "next"))]
-        let mut new_live_until = host.with_ledger_info(|li| {
-            li.sequence_number.checked_add(extend_to).ok_or_else(|| {
-                // overflowing here means a misconfiguration of the network (the
-                // ttl is too large), in which case we immediately flag it as an
-                // unrecoverable `InternalError`, even though the source is
-                // external to the host.
-                HostError::from(Error::from_type_and_code(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                ))
-            })
-        })?;
 
         // Clamp persistent entries to max network TTL (temporary entries
         // wouldn't get here).
