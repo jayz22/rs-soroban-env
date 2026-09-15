@@ -1,0 +1,23 @@
+# Throwaway calibration experiment. NOT part of the workspace (own `[workspace]`
+# table detaches it) and NOT intended to be committed. See docs/CALIBRATION.md
+# section 6.4.
+[package]
+name = "calibration-experiments"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+ml-dsa = { git = "https://github.com/RustCrypto/signatures.git", rev = "c97a631", default-features = false, features = ["alloc"] }
+rand = "0.8.5"
+perf-event = "0.4.7"
+
+[[bin]]
+name = "hint-weight"
+path = "src/hint_weight.rs"
+
+[profile.release]
+debug = true

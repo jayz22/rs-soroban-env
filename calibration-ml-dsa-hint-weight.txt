@@ -1,0 +1,95 @@
+ML-DSA Signature::decode hint-weight experiment
+honest sample count per variant: 2000
+
+==============================================================================
+ML-DSA-44  (omega = 80, k = 4, sig_len = 2420)
+==============================================================================
+
+[1] honest hint weight over 2000 signatures: min 43, max 80, mean 62.8, reached omega=80 in 14 (0.70%)
+    weight   0-7   | 0     
+    weight   8-15  | 0     
+    weight  16-23  | 0     
+    weight  24-31  | 0     
+    weight  32-39  | 0     
+    weight  40-47  | 53    #
+    weight  48-55  | 372   #######
+    weight  56-63  | 739   ##############
+    weight  64-71  | 633   ############
+    weight  72-80  | 203   ####
+
+[2] decode cost vs hint weight (min of 200 runs, crafted hints)
+     weight    concentrated          spread
+          0           40927           40927
+         20           41036           41019
+         40           41149           41134
+         60           41264           41249
+         80           41342           41327
+    -> most expensive: weight 80 / concentrated layout at 41342 insns
+
+[3] gap analysis
+    honest at min weight ( 43) :    41160 insns
+    honest at max weight ( 80) :    41329 insns
+    crafted ceiling      ( 80) :    41344 insns
+    gap (ceiling - honest max)  :       15 insns (+0.036%)
+
+==============================================================================
+ML-DSA-65  (omega = 55, k = 6, sig_len = 3309)
+==============================================================================
+
+[1] honest hint weight over 2000 signatures: min 19, max 55, mean 38.3, reached omega=55 in 5 (0.25%)
+    weight   0-4   | 0     
+    weight   5-10  | 0     
+    weight  11-15  | 0     
+    weight  16-21  | 5     
+    weight  22-27  | 64    #
+    weight  28-32  | 347   ######
+    weight  33-38  | 751   ###############
+    weight  39-43  | 535   ##########
+    weight  44-49  | 252   #####
+    weight  50-55  | 46    
+
+[2] decode cost vs hint weight (min of 200 runs, crafted hints)
+     weight    concentrated          spread
+          0           50628           50628
+         13           50700           50673
+         27           50774           50747
+         41           50861           50834
+         55           50899           50872
+    -> most expensive: weight 55 / concentrated layout at 50899 insns
+
+[3] gap analysis
+    honest at min weight ( 19) :    50701 insns
+    honest at max weight ( 55) :    50872 insns
+    crafted ceiling      ( 55) :    50984 insns
+    gap (ceiling - honest max)  :      112 insns (+0.220%)
+
+==============================================================================
+ML-DSA-87  (omega = 75, k = 8, sig_len = 4627)
+==============================================================================
+
+[1] honest hint weight over 2000 signatures: min 32, max 75, mean 56.6, reached omega=75 in 2 (0.10%)
+    weight   0-6   | 0     
+    weight   7-14  | 0     
+    weight  15-21  | 0     
+    weight  22-29  | 0     
+    weight  30-37  | 9     
+    weight  38-44  | 103   ##
+    weight  45-52  | 537   ##########
+    weight  53-59  | 783   ###############
+    weight  60-67  | 463   #########
+    weight  68-75  | 105   ##
+
+[2] decode cost vs hint weight (min of 200 runs, crafted hints)
+     weight    concentrated          spread
+          0           70786           70786
+         18           70887           70855
+         37           70996           70978
+         56           71102           71100
+         75           71170           71180
+    -> most expensive: weight 75 / spread layout at 71180 insns
+
+[3] gap analysis
+    honest at min weight ( 32) :    70946 insns
+    honest at max weight ( 75) :    71178 insns
+    crafted ceiling      ( 75) :    71170 insns
+    gap (ceiling - honest max)  :       -8 insns (-0.011%)
