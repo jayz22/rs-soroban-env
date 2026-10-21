@@ -1,6 +1,7 @@
 use crate::common::HostCostMeasurement;
 use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ff::UniformRand;
+use ark_ec::AffineRepr;
+use ark_ff::{BigInt, Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{
@@ -185,15 +186,75 @@ impl HostCostMeasurement for Bls12381G1ProjectiveToAffineMeasure {
         rng: &mut StdRng,
         _input: u64,
     ) -> Bls12381G1ProjectiveToAffineSample {
-        let p0 = G1Projective::rand(rng);
-        Bls12381G1ProjectiveToAffineSample(p0)
+        Bls12381G1ProjectiveToAffineSample(random_g1_projective_with_nontrivial_z(rng))
     }
+}
+
+// Random points in Jacobian form with Z not in {0, 1}, so that `into_affine`
+// takes the field-inversion path (Z == 1 is a copy-only shortcut).
+// `Projective::rand` already yields Z != 1 for BLS12-381 because the cofactor
+// multiplication runs many doublings, but we construct Z explicitly so that a
+// change in arkworks' sampling can't silently calibrate on the shortcut.
+fn random_g1_projective_with_nontrivial_z(rng: &mut StdRng) -> G1Projective {
+    loop {
+        let p = G1Affine::rand(rng);
+        let l = Fq::rand(rng);
+        if p.is_zero() || l.is_zero() || l.is_one() {
+            continue;
+        }
+        let (x, y) = p.xy().unwrap();
+        let l2 = l.square();
+        let q = G1Projective::new_unchecked(x * l2, y * (l2 * l), l);
+        assert!(!q.z.is_one());
+        return q;
+    }
+}
+
+fn random_g2_projective_with_nontrivial_z(rng: &mut StdRng) -> G2Projective {
+    loop {
+        let p = G2Affine::rand(rng);
+        let l = Fq2::rand(rng);
+        if p.is_zero() || l.is_zero() || l.is_one() {
+            continue;
+        }
+        let (x, y) = p.xy().unwrap();
+        let l2 = l.square();
+        let q = G2Projective::new_unchecked(x * l2, y * (l2 * l), l);
+        assert!(!q.z.is_one());
+        return q;
+    }
+}
+
+// The canonical scalar (< r) with the maximal Hamming weight at full bit
+// length: weight 254 over 255 bits. `Affine * Fr` uses double-and-add, which
+// performs one point addition per set bit, so this maximizes the cost.
+fn max_hamming_weight_fr() -> Fr {
+    let s = Fr::from_bigint(BigInt([
+        u64::MAX,
+        u64::MAX,
+        u64::MAX,
+        0x6fff_ffff_ffff_ffff,
+    ]))
+    .unwrap();
+    assert_eq!(
+        s.into_bigint()
+            .0
+            .iter()
+            .map(|l| l.count_ones())
+            .sum::<u32>(),
+        254
+    );
+    s
 }
 
 pub(crate) struct Bls12381G1MulMeasure;
 
 impl HostCostMeasurement for Bls12381G1MulMeasure {
     type Runner = Bls12381G1MulRun;
+
+    fn new_worst_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1MulSample {
+        Bls12381G1MulSample(G1Affine::rand(rng), max_hamming_weight_fr())
+    }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1MulSample {
         let p = G1Affine::rand(rng);
@@ -258,8 +319,7 @@ impl HostCostMeasurement for Bls12381G2ProjectiveToAffineMeasure {
         rng: &mut StdRng,
         _input: u64,
     ) -> Bls12381G2ProjectiveToAffineSample {
-        let p0 = G2Projective::rand(rng);
-        Bls12381G2ProjectiveToAffineSample(p0)
+        Bls12381G2ProjectiveToAffineSample(random_g2_projective_with_nontrivial_z(rng))
     }
 }
 
@@ -279,6 +339,10 @@ pub(crate) struct Bls12381G2MulMeasure;
 
 impl HostCostMeasurement for Bls12381G2MulMeasure {
     type Runner = Bls12381G2MulRun;
+
+    fn new_worst_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2MulSample {
+        Bls12381G2MulSample(G2Affine::rand(rng), max_hamming_weight_fr())
+    }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2MulSample {
         let p = G2Affine::rand(rng);

@@ -443,7 +443,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 68471938
+        Cpu limit: 100000000; used: 73154482
         Mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
@@ -465,10 +465,10 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         DecodeEcdsaCurve256Sig             1              None           711            0              711                 0                   0                   0                   
         RecoverEcdsaSecp256k1Key           1              None           2314804        181            2314804             0                   181                 0                   
         Int256AddSub                       1              None           4176           99             4176                0                   99                  0                   
-        Int256Mul                          1              None           4716           99             4716                0                   99                  0                   
+        Int256Mul                          1              None           5058           99             5058                0                   99                  0                   
         Int256Div                          1              None           4680           99             4680                0                   99                  0                   
-        Int256Pow                          1              None           4256           99             4256                0                   99                  0                   
-        Int256Shift                        1              None           884            99             884                 0                   99                  0                   
+        Int256Pow                          1              None           10777          99             10777               0                   99                  0                   
+        Int256Shift                        1              None           1899           99             1899                0                   99                  0                   
         ChaCha20DrawBytes                  1              Some(1)        1062           0              1059                502                 0                   0                   
         ParseWasmInstructions              1              Some(1)        73275          17614          73077               25410               17564               6457                
         ParseWasmFunctions                 1              Some(1)        4224           370            0                   540752              0                   47464               
@@ -501,12 +501,12 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bls12381G1ProjectiveToAffine       1              None           92642          0              92642               0                   0                   0                   
         Bls12381G2ProjectiveToAffine       1              None           100742         0              100742              0                   0                   0                   
         Bls12381G1Add                      1              None           7689           0              7689                0                   0                   0                   
-        Bls12381G1Mul                      1              None           2458985        0              2458985             0                   0                   0                   
+        Bls12381G1Mul                      1              None           3513357        0              3513357             0                   0                   0                   
         Bls12381G1Msm                      1              Some(1)        3083017        111576         2347584             94135478            109494              266603              
         Bls12381MapFpToG1                  1              None           1020885        2776           1020885             0                   2776                0                   
         Bls12381HashToG1                   1              Some(1)        2638504        5896           2638451             6803                5896                0                   
         Bls12381G2Add                      1              None           25207          0              25207               0                   0                   0                   
-        Bls12381G2Mul                      1              None           7873219        0              7873219             0                   0                   0                   
+        Bls12381G2Mul                      1              None           11493513       0              11493513            0                   0                   0                   
         Bls12381G2Msm                      1              Some(1)        9996543        221736         7663880             298580871           219654              266603              
         Bls12381MapFp2ToG2                 1              None           1856539        1672           1856539             0                   1672                0                   
         Bls12381HashToG2                   1              Some(1)        6315508        3960           6315452             7232                3960                0                   
@@ -522,9 +522,9 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bn254G1CheckPointOnCurve           0              None           0              0              904                 0                   0                   0                   
         Bn254G2CheckPointOnCurve           0              None           0              0              2811                0                   0                   0                   
         Bn254G2CheckPointInSubgroup        0              None           0              0              1706052             0                   0                   0                   
-        Bn254G1ProjectiveToAffine          0              None           0              0              61                  0                   0                   0                   
+        Bn254G1ProjectiveToAffine          0              None           0              0              34266               0                   0                   0                   
         Bn254G1Add                         0              None           0              0              3623                0                   0                   0                   
-        Bn254G1Mul                         0              None           0              0              1150435             0                   0                   0                   
+        Bn254G1Mul                         0              None           0              0              1642921             0                   0                   0                   
         Bn254Pairing                       0              Some(0)        0              0              5263916             392472814           1821                6232546             
         Bn254FrFromU256                    0              None           0              0              2052                0                   0                   0                   
         Bn254FrToU256                      0              None           0              0              1133                0                   312                 0                   
@@ -545,7 +545,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
-        Shadow cpu limit: 100000000; used: 68471938
+        Shadow cpu limit: 100000000; used: 73154482
         Shadow mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
 
@@ -685,5 +685,32 @@ fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
     // The peak still reflects both VMs' linear memory, above the refunded net.
     assert!(peak >= linear_mem);
     assert!(net < peak);
+    Ok(())
+}
+
+fn default_constant_cpu_cost(ty: ContractCostType) -> Result<u64, HostError> {
+    let budget = Budget::default();
+    budget.charge(ty, None)?;
+    budget.get_cpu_insns_consumed()
+}
+
+// A projective-to-affine conversion is a field inversion plus a few
+// multiplications, so its cost must not fall below that of an inversion. This
+// guards against calibrating it on the Z == 1 shortcut, which skips the
+// inversion.
+#[test]
+fn projective_to_affine_cost_covers_field_inversion() -> Result<(), HostError> {
+    assert!(
+        default_constant_cpu_cost(ContractCostType::Bn254G1ProjectiveToAffine)?
+            >= default_constant_cpu_cost(ContractCostType::Bn254FrInv)?
+    );
+    assert!(
+        default_constant_cpu_cost(ContractCostType::Bls12381G1ProjectiveToAffine)?
+            >= default_constant_cpu_cost(ContractCostType::Bls12381FrInv)?
+    );
+    assert!(
+        default_constant_cpu_cost(ContractCostType::Bls12381G2ProjectiveToAffine)?
+            >= default_constant_cpu_cost(ContractCostType::Bls12381G1ProjectiveToAffine)?
+    );
     Ok(())
 }

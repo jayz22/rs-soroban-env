@@ -7,7 +7,7 @@ use crate::{
 };
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{BigInteger, PrimeField, UniformRand};
+use ark_ff::{BigInteger, One, PrimeField, UniformRand};
 use ark_serialize::CanonicalSerialize;
 use core::panic;
 use rand::{rngs::StdRng, SeedableRng};
@@ -393,6 +393,43 @@ fn test_bn254_g1_mul() -> Result<(), HostError> {
     }
 
     Ok(())
+}
+
+// The `Bn254G1Mul` calibration uses the canonical scalar with the maximal
+// Hamming weight. Check it is accepted and multiplies correctly.
+#[test]
+fn test_bn254_g1_mul_max_hamming_weight_scalar() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x5d; 32]);
+    let host = Host::test_host();
+    let p = sample_g1(&host, &mut rng)?;
+    let s: U256Val = host
+        .obj_from_u256_pieces(0x2fff_ffff_ffff_ffff, u64::MAX, u64::MAX, u64::MAX)?
+        .into();
+    let s_minus_one: U256Val = host
+        .obj_from_u256_pieces(0x2fff_ffff_ffff_ffff, u64::MAX, u64::MAX, u64::MAX - 1)?
+        .into();
+    let ps = host.bn254_g1_mul(p, s)?;
+    let ps_minus_one = host.bn254_g1_mul(p, s_minus_one)?;
+    let expected = host.bn254_g1_add(ps_minus_one, p)?;
+    assert_eq!(
+        host.obj_cmp(ps.into(), expected.into())?,
+        Ordering::Equal as i64
+    );
+    Ok(())
+}
+
+// `Bn254G1ProjectiveToAffine` must be calibrated on points with Z != 1, which
+// is what the host's add/mul/msm outputs look like (Z == 1 is a copy-only
+// shortcut in `into_affine`).
+#[test]
+fn test_bn254_g1_add_output_is_not_normalized() {
+    let g = G1Affine::new(Fq::from(1u64), Fq::from(2u64));
+    assert!(!(g + g).z.is_one());
+    let mut rng = StdRng::from_seed([0x5e; 32]);
+    for _ in 0..16 {
+        let sum = G1Affine::rand(&mut rng) + G1Affine::rand(&mut rng);
+        assert!(!sum.z.is_one());
+    }
 }
 
 #[test]

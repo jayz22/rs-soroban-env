@@ -11,7 +11,9 @@ fn worst_case_add_pair() -> (I256, I256) {
     (I256::MAX / 2, I256::MAX / 2 - 1)
 }
 fn worst_case_mul_pair() -> (I256, I256) {
-    (i128::MAX.into(), (i128::MAX - 1).into())
+    // Both |operands| >= 2, so I256 `checked_mul` runs its 256-bit division
+    // overflow check; a 65-bit divisor was the most expensive one found.
+    ((I256::new(1) << 126u32) + 1, -((I256::new(1) << 64u32) + 1))
 }
 fn worst_case_div_pair() -> (I256, I256) {
     let a: I256 = util::repeating_byte_i256(0xf7, 32);
@@ -19,11 +21,18 @@ fn worst_case_div_pair() -> (I256, I256) {
     (a, b)
 }
 fn worst_case_pow_pair() -> (I256, u32) {
-    let a: I256 = util::repeating_byte_i256(0xf7, 2);
-    (a, 15)
+    // I256 `checked_mul` runs a 256-bit division whenever both |operands| >= 2.
+    // Base 2 survives the most such multiplications before overflowing (7
+    // squarings and 8 accumulator multiplications for an all-ones exponent).
+    // Bases 0 and +-1 run up to 63 multiplications, but all of them take the
+    // cheap |x| < 2 path, and larger bases overflow sooner.
+    (I256::new(2), u32::MAX)
 }
 fn worst_case_shift_pair() -> (I256, u32) {
-    (I256::new(1), 255)
+    // The lhs must be an object (not representable as a small value) so that
+    // the object visit is included, and the result must be small so that no
+    // separately-charged allocation offsets it.
+    (I256::MAX, 1)
 }
 
 macro_rules! impl_int256_measure {

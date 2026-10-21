@@ -426,7 +426,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Mul => {
-                    cpu.const_term = 4716;
+                    cpu.const_term = 5058;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Div => {
@@ -434,11 +434,11 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Pow => {
-                    cpu.const_term = 4256;
+                    cpu.const_term = 10777;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Shift => {
-                    cpu.const_term = 884;
+                    cpu.const_term = 1899;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ChaCha20DrawBytes => {
@@ -570,7 +570,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G1Mul => {
-                    cpu.const_term = 2458985;
+                    cpu.const_term = 3513357;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G1Msm => {
@@ -590,7 +590,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G2Mul => {
-                    cpu.const_term = 7873219;
+                    cpu.const_term = 11493513;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G2Msm => {
@@ -654,7 +654,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1ProjectiveToAffine => {
-                    cpu.const_term = 61;
+                    cpu.const_term = 34266;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1Add => {
@@ -662,7 +662,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1Mul => {
-                    cpu.const_term = 1150435;
+                    cpu.const_term = 1642921;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254Pairing => {

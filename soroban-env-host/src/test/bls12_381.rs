@@ -705,6 +705,42 @@ fn g1_mul() -> Result<(), HostError> {
     Ok(())
 }
 
+// The `Bls12381G1Mul`/`Bls12381G2Mul` calibration uses the canonical scalar
+// with the maximal Hamming weight. Check it is accepted and multiplies
+// correctly.
+#[test]
+fn g1_g2_mul_max_hamming_weight_scalar() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xfe; 32]);
+    let host = Host::test_host();
+    let s: U256Val = host
+        .obj_from_u256_pieces(0x6fff_ffff_ffff_ffff, u64::MAX, u64::MAX, u64::MAX)?
+        .into();
+    let s_minus_one: U256Val = host
+        .obj_from_u256_pieces(0x6fff_ffff_ffff_ffff, u64::MAX, u64::MAX, u64::MAX - 1)?
+        .into();
+    {
+        let p = sample_g1(&host, &mut rng)?;
+        let ps = host.bls12_381_g1_mul(p, s)?;
+        let ps_minus_one = host.bls12_381_g1_mul(p, s_minus_one)?;
+        let expected = host.bls12_381_g1_add(ps_minus_one, p)?;
+        assert_eq!(
+            host.obj_cmp(ps.into(), expected.into())?,
+            Ordering::Equal as i64
+        );
+    }
+    {
+        let p = sample_g2(&host, &mut rng)?;
+        let ps = host.bls12_381_g2_mul(p, s)?;
+        let ps_minus_one = host.bls12_381_g2_mul(p, s_minus_one)?;
+        let expected = host.bls12_381_g2_add(ps_minus_one, p)?;
+        assert_eq!(
+            host.obj_cmp(ps.into(), expected.into())?,
+            Ordering::Equal as i64
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn g1_msm() -> Result<(), HostError> {
     let mut rng = StdRng::from_seed([0xff; 32]);
