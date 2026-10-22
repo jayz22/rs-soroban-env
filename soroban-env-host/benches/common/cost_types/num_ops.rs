@@ -12,8 +12,14 @@ fn worst_case_add_pair() -> (I256, I256) {
 }
 fn worst_case_mul_pair() -> (I256, I256) {
     // Both |operands| >= 2, so I256 `checked_mul` runs its 256-bit division
-    // overflow check; a 65-bit divisor was the most expensive one found.
-    ((I256::new(1) << 126u32) + 1, -((I256::new(1) << 64u32) + 1))
+    // overflow check. A divisor of 129 bits or more takes the Knuth long
+    // division path, which is the most expensive one; opposite signs add a
+    // negation. The product must not overflow, or the cheaper error path runs
+    // instead.
+    (
+        (I256::new(1) << 124u32) + 1,
+        -((I256::new(1) << 128u32) + 1),
+    )
 }
 fn worst_case_div_pair() -> (I256, I256) {
     let a: I256 = util::repeating_byte_i256(0xf7, 32);
@@ -21,12 +27,12 @@ fn worst_case_div_pair() -> (I256, I256) {
     (a, b)
 }
 fn worst_case_pow_pair() -> (I256, u32) {
-    // I256 `checked_mul` runs a 256-bit division whenever both |operands| >= 2.
-    // Base 2 survives the most such multiplications before overflowing (7
-    // squarings and 8 accumulator multiplications for an all-ones exponent).
-    // Bases 0 and +-1 run up to 63 multiplications, but all of them take the
-    // cheap |x| < 2 path, and larger bases overflow sooner.
-    (I256::new(2), u32::MAX)
+    // `checked_pow` is square-and-multiply, so an all-ones exponent runs the
+    // most `checked_mul` calls: 63 for a base that never overflows (0 or +-1).
+    // Each of those skips the division overflow check (|x| < 2) but still does
+    // the full 256-bit multiplication, and 63 of them cost more than the 15
+    // multiplications plus 14 divisions that base 2 runs before overflowing.
+    (I256::new(1), u32::MAX)
 }
 fn worst_case_shift_pair() -> (I256, u32) {
     // The lhs must be an object (not representable as a small value) so that

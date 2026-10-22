@@ -1283,9 +1283,10 @@ fn test_i256_checked_pow() -> Result<(), HostError> {
     Ok(())
 }
 
-// The `Int256Pow` calibration sample (2, u32::MAX) relies on these behaviors:
-// base 2 runs the most expensive multiplications before overflowing, and bases
-// 0 and +-1 run the full exponent loop without overflowing.
+// The `Int256Pow` calibration sample (1, u32::MAX) relies on these behaviors:
+// bases 0 and +-1 run the full 63-multiplication exponent loop without
+// overflowing, while any other base (2 being the slowest to do so) overflows
+// after far fewer multiplications.
 #[test]
 fn test_i256_pow_calibration_worst_case_inputs() -> Result<(), HostError> {
     let host = Host::test_host();
@@ -1298,6 +1299,8 @@ fn test_i256_pow_calibration_worst_case_inputs() -> Result<(), HostError> {
     )?;
     check_num_arith_rhs_u32_expect_err(&host, I256::new(2), 255, Host::i256_pow)?;
     check_num_arith_rhs_u32_expect_err(&host, I256::new(2), u32::MAX, Host::i256_pow)?;
+    check_num_arith_rhs_u32_expect_err(&host, I256::new(-2), 256, Host::i256_pow)?;
+    check_num_arith_rhs_u32_expect_err(&host, I256::new(3), 162, Host::i256_pow)?;
     check_num_checked_arith_rhs_u32_returns_void::<_, I256Val, _>(
         &host,
         I256::new(2),
