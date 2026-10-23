@@ -57,6 +57,9 @@ Per the `calibrating-cost-models` skill:
 
 ## 4. Results (all values verbatim from the logs; "old" = `b9b5dc5b`)
 
+Raw figures, sweep tables and the reproduction script are in
+`calibration-2026-10-logs/`.
+
 ### Constant cost types (10,000 samples)
 
 | Cost type | old | **new (max)** | Δ | min | mean | max/min | std |
