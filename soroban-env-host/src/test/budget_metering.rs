@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::{
     budget::{AsBudget, Budget},
     host::{
@@ -715,4 +717,17 @@ fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
     assert!(peak >= linear_mem);
     assert!(net < peak);
     Ok(())
+}
+
+#[test]
+fn metered_clone_of_mutably_borrowed_refcell_is_an_error() {
+    let budget = Budget::default();
+    let cell = RefCell::new(vec![1u64, 2, 3]);
+    assert_eq!(cell.metered_clone(&budget).unwrap(), cell);
+
+    let _borrowed = cell.borrow_mut();
+    assert!(HostError::result_matches_err(
+        cell.metered_clone(&budget),
+        (ScErrorType::Context, ScErrorCode::InternalError)
+    ));
 }

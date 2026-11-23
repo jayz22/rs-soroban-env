@@ -27,15 +27,15 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, Asset, BytesM,
-        ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryExt, ContractCodeEntryV1,
-        ContractCostType, ContractEvent, ContractEventBody, ContractExecutable, ContractId,
-        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
-        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature,
-        SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryV1, ContractCostType,
+        ContractEvent, ContractEventBody, ContractExecutable, ContractId, ContractIdPreimage,
+        CreateContractArgs, CreateContractArgsV2, Duration, Hash, InvokeContractArgs, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
+        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
+        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        SorobanCredentials, SorobanDelegateSignature, SponsorshipDescriptor, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -45,7 +45,7 @@ use crate::{
     VecObject, Void, I256, U256,
 };
 
-use super::declared_size::DeclaredSizeForMetering;
+use super::{declared_size::DeclaredSizeForMetering, error::TryBorrowOrErr};
 
 /// Charge for an N-element "shallow copy" of some type, not cloning any substructure. The charge
 /// unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
@@ -348,30 +348,6 @@ impl MeteredClone for ContractId {}
 impl MeteredClone for Uint256 {}
 impl MeteredClone for ContractCodeCostInputs {}
 impl MeteredClone for ContractCodeEntryV1 {}
-impl MeteredClone for ContractExecutable {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        match self {
-            // The Wasm hash and StellarAsset variants carry no heap
-            // substructure. For an external reference, the owner `ScAddress` is
-            // shallow, but the tag `ScString` owns heap data.
-            ContractExecutable::Wasm(_) | ContractExecutable::StellarAsset => Ok(()),
-            ContractExecutable::ExternalRef(external_ref) => {
-                StringM::charge_for_substructure(&external_ref.tag, budget)
-            }
-        }
-    }
-}
-impl MeteredClone for CreateContractArgs {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        // The preimage is shallow, but the executable may own an external
-        // reference tag.
-        self.executable.charge_for_substructure(budget)
-    }
-}
 impl MeteredClone for AccountId {}
 impl MeteredClone for SponsorshipDescriptor {}
 impl MeteredClone for ScAddress {}
@@ -409,7 +385,7 @@ impl<T: MeteredClone> MeteredClone for RefCell<T> {
     const IS_SHALLOW: bool = T::IS_SHALLOW;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.borrow().charge_for_substructure(budget)
+        self.try_borrow_or_err()?.charge_for_substructure(budget)
     }
 }
 
@@ -633,11 +609,7 @@ impl MeteredClone for ContractCodeEntry {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        // self.ext is a former ExtensionEntry; see note on ExtensionEntry in declared_size.rs
-        match &self.ext {
-            ContractCodeEntryExt::V0 => (),
-            ContractCodeEntryExt::V1(v1) => v1.charge_for_substructure(budget.clone())?,
-        }
+        // `ext` and `hash` are shallow.
         self.code.charge_for_substructure(budget)
     }
 }
@@ -696,8 +668,13 @@ impl MeteredClone for SorobanAuthorizedInvocation {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.function.charge_for_substructure(budget.clone())?;
-        self.sub_invocations.charge_for_substructure(budget)
+        // Sub-invocations are recursive, so this is a depth limit checkpoint,
+        // similarly to `ScVal`.
+        let mut budget_clone = budget.as_budget().clone();
+        budget_clone.with_limited_depth(|_| {
+            self.function.charge_for_substructure(budget.clone())?;
+            self.sub_invocations.charge_for_substructure(budget)
+        })
     }
 }
 
@@ -774,12 +751,37 @@ impl MeteredClone for InvokeContractArgs {
     }
 }
 
+impl MeteredClone for ContractExecutable {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match self {
+            // The Wasm hash and StellarAsset variants are shallow.
+            // ExternalRef's tag `ScString` owns heap data.
+            ContractExecutable::Wasm(_) | ContractExecutable::StellarAsset => Ok(()),
+            ContractExecutable::ExternalRef(external_ref) => {
+                StringM::charge_for_substructure(&external_ref.tag, budget)
+            }
+        }
+    }
+}
+
+impl MeteredClone for CreateContractArgs {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // The preimage is shallow, but the executable may own an external
+        // reference tag.
+        self.executable.charge_for_substructure(budget)
+    }
+}
+
 impl MeteredClone for CreateContractArgsV2 {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.contract_id_preimage
-            .charge_for_substructure(budget.clone())?;
+        // The preimage is shallow, but the executable may own an external
+        // reference tag, and the constructor arguments are a vector.
         self.executable.charge_for_substructure(budget.clone())?;
         self.constructor_args.charge_for_substructure(budget)
     }

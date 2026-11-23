@@ -3,8 +3,11 @@ use soroban_env_common::xdr::{Limits, ReadXdr, WriteXdr};
 use crate::{
     budget::AsBudget,
     host::metered_clone::MeteredClone,
-    xdr::{ScErrorCode, ScErrorType, ScVal, ScVec},
-    Env, Host, HostError, DEFAULT_XDR_RW_LIMITS,
+    xdr::{
+        ContractId, Hash, InvokeContractArgs, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+    },
+    Env, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS,
 };
 
 #[test]
@@ -136,4 +139,39 @@ fn length_limited_scval_xdr_conversion() -> Result<(), HostError> {
     let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())
+}
+
+fn nested_auth_invocation(depth: u32) -> SorobanAuthorizedInvocation {
+    let invocation =
+        |sub_invocations: Vec<SorobanAuthorizedInvocation>| SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                contract_address: ScAddress::Contract(ContractId(Hash([0; 32]))),
+                function_name: "f".try_into().unwrap(),
+                args: Default::default(),
+            }),
+            sub_invocations: sub_invocations.try_into().unwrap(),
+        };
+    let mut root = invocation(vec![]);
+    for _ in 1..depth {
+        root = invocation(vec![root]);
+    }
+    root
+}
+
+#[test]
+fn deep_auth_invocation_clone() {
+    let host = Host::test_host();
+    host.as_budget().reset_unlimited().unwrap();
+
+    let at_limit = nested_auth_invocation(DEFAULT_HOST_DEPTH_LIMIT);
+    assert_eq!(at_limit.metered_clone(host.as_budget()).unwrap(), at_limit);
+
+    let over_limit = nested_auth_invocation(DEFAULT_HOST_DEPTH_LIMIT + 1);
+    assert!(HostError::result_matches_err(
+        over_limit.metered_clone(host.as_budget()),
+        (ScErrorType::Context, ScErrorCode::ExceededLimit)
+    ));
+
+    // The failed clone leaves the depth limit as it found it.
+    assert_eq!(at_limit.metered_clone(host.as_budget()).unwrap(), at_limit);
 }
