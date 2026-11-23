@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::{
     budget::AsBudget,
-    host::metered_clone::MeteredClone,
+    host::{declared_size::DeclaredSizeForMetering, metered_clone::MeteredClone},
     xdr::{
         AccountId, ContractCostType, ContractExecutable, ContractExecutableExternalRef, ContractId,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
@@ -133,8 +133,6 @@ fn test_executable_tag_storage_invariants() {
 
 // region: ExternalRef metering
 
-const DECLARED_EXECUTABLE_SIZE: u64 = 72;
-
 fn external_ref(owner: u8, tag: &[u8]) -> ContractExecutable {
     ContractExecutable::ExternalRef(ContractExecutableExternalRef {
         executable_owner: ScAddress::Contract(ContractId(Hash([owner; 32]))),
@@ -158,12 +156,17 @@ fn test_external_ref_compare_charges_tag_bytes() {
     let host = Host::test_host();
 
     assert_eq!(host.as_budget().compare(&a, &b).unwrap(), Ordering::Less);
+    // The executable itself, then the owner, then the tag bytes.
     assert_eq!(
         host.as_budget()
             .get_tracker(ContractCostType::MemCmp)
             .unwrap()
             .inputs,
-        Some(DECLARED_EXECUTABLE_SIZE + len as u64)
+        Some(
+            <ContractExecutable as DeclaredSizeForMetering>::DECLARED_SIZE
+                + <ScAddress as DeclaredSizeForMetering>::DECLARED_SIZE
+                + len as u64
+        )
     );
 }
 

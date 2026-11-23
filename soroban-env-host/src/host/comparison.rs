@@ -270,17 +270,21 @@ impl Compare<ContractExecutable> for Budget {
         a: &ContractExecutable,
         b: &ContractExecutable,
     ) -> Result<Ordering, Self::Error> {
-        // Charge the declared size of the enum itself, which covers every
-        // fixed-size field (the Wasm hash and the ExternalRef owner).
+        // Charge the declared size of the enum itself, so that a comparison
+        // decided by the variant alone is not free. The content of each
+        // variant is charged by the metered comparisons below.
         self.charge(
             ContractCostType::MemCmp,
             Some(<ContractExecutable as DeclaredSizeForMetering>::DECLARED_SIZE),
         )?;
         match (a, b) {
-            // The ExternalRef tag is variable-size, so it is charged per byte.
+            (ContractExecutable::Wasm(a), ContractExecutable::Wasm(b)) => self.compare(a, b),
+            (ContractExecutable::StellarAsset, ContractExecutable::StellarAsset) => {
+                Ok(Ordering::Equal)
+            }
             // This matches the derived Ord: owner first, then tag bytes.
             (ContractExecutable::ExternalRef(a), ContractExecutable::ExternalRef(b)) => {
-                match a.executable_owner.cmp(&b.executable_owner) {
+                match self.compare(&a.executable_owner, &b.executable_owner)? {
                     Ordering::Equal => <Self as Compare<&[u8]>>::compare(
                         self,
                         &a.tag.as_slice(),
@@ -289,10 +293,14 @@ impl Compare<ContractExecutable> for Budget {
                     cmp => Ok(cmp),
                 }
             }
-            // All remaining cases are fixed-size.
+            // List out one side of all the remaining cases here so we don't
+            // accidentally forget to update this when/if a new executable
+            // type is added.
             (ContractExecutable::Wasm(_), _)
             | (ContractExecutable::StellarAsset, _)
-            | (ContractExecutable::ExternalRef(_), _) => Ok(a.cmp(b)),
+            | (ContractExecutable::ExternalRef(_), _) => {
+                Ok(a.discriminant().cmp(&b.discriminant()))
+            }
         }
     }
 }
