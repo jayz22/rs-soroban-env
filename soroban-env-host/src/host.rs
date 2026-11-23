@@ -2613,9 +2613,6 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        // `to_host_val` rejects any `ScVal` that cannot be represented as a
-        // `Val`, at every level of nesting, and meters the walk it does to
-        // find one.
         self.to_host_val(&scv)
     }
 
@@ -2931,9 +2928,7 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
             // We allocate the new vector to hold `len + 1` bytes and write the two halves
-            // around the new byte, so that every byte is copied exactly once. Copying the
-            // whole content and then inserting would move the tail a second time, which the
-            // charge below does not cover.
+            // around the new byte, so that every byte is copied exactly once.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
             let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             let (head, tail) = hv.as_slice().split_at(i as usize);

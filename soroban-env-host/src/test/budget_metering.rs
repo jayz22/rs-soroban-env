@@ -342,8 +342,6 @@ fn test_metered_collection() -> Result<(), HostError> {
     Ok(())
 }
 
-// A metered collection charges for the iterator's upper bound once, so the
-// result must not hold a larger allocation than that.
 #[test]
 fn test_metered_collection_does_not_overallocate() -> Result<(), HostError> {
     let budget = Budget::default();
