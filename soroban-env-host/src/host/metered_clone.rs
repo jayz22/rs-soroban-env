@@ -124,10 +124,14 @@ where
     /// Metered version of the container's `with_capacity` method.
     fn with_metered_capacity(capacity: usize, budget: impl AsBudget) -> Result<Self, HostError>;
 
-    /// Collects `iter` into a container with initial capacity `capacity`. The caller
-    /// must charge for enough capacity to hold every yielded item to avoid unmetered
-    /// reallocation.
-    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self;
+    /// Charges for a container of `capacity` elements, allocates it once at
+    /// that capacity, and moves the items of `iter` into it. `capacity` must
+    /// be an upper bound on the number of items `iter` yields.
+    fn metered_from_iter(
+        iter: impl Iterator<Item = Self::Item>,
+        capacity: usize,
+        budget: impl AsBudget,
+    ) -> Result<Self, HostError>;
 }
 
 impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
@@ -138,10 +142,14 @@ impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
         Ok(Vec::with_capacity(capacity))
     }
 
-    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self {
-        let mut v = Vec::with_capacity(capacity);
+    fn metered_from_iter(
+        iter: impl Iterator<Item = Self::Item>,
+        capacity: usize,
+        budget: impl AsBudget,
+    ) -> Result<Self, HostError> {
+        let mut v = Self::with_metered_capacity(capacity, budget)?;
         v.extend(iter);
-        v
+        Ok(v)
     }
 }
 
@@ -158,14 +166,20 @@ impl<T: DeclaredSizeForMetering, E: DeclaredSizeForMetering> MeteredContainer
         Err(Error::from_type_and_code(ScErrorType::Object, ScErrorCode::InvalidAction).into())
     }
 
-    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self {
-        // Collecting into a `Result<Vec<T>, E>` hides the iterator's size hint
-        // from the `Vec`, which then grows by doubling.
+    fn metered_from_iter(
+        iter: impl Iterator<Item = Self::Item>,
+        capacity: usize,
+        budget: impl AsBudget,
+    ) -> Result<Self, HostError> {
+        Self::charge_bulk_init_cpy(capacity as u64, budget)?;
         let mut v = Vec::with_capacity(capacity);
         for item in iter {
-            v.push(item?);
+            match item {
+                Ok(item) => v.push(item),
+                Err(e) => return Ok(Err(e)),
+            }
         }
-        Ok(v)
+        Ok(Ok(v))
     }
 }
 
@@ -185,8 +199,10 @@ where
         budget: impl AsBudget,
     ) -> Result<B, HostError> {
         if let (_, Some(ub)) = self.size_hint() {
-            B::charge_bulk_init_cpy(ub as u64, budget)?;
-            Ok(B::collect_with_capacity(self, ub))
+            // `metered_from_iter` allocates once at the charged upper bound. A
+            // plain `collect` would hide the iterator's size hint from the
+            // `Vec`, which grows past what was charged.
+            B::metered_from_iter(self, ub, budget)
         } else {
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
         }
