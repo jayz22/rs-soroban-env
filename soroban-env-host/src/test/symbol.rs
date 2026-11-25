@@ -211,19 +211,21 @@ fn invalid_symbol_conversions() {
     }
 }
 
-#[test]
-fn oversized_symbol_slice_is_rejected_before_it_is_scanned() -> Result<(), HostError> {
-    let cpu_charged = |len: usize| -> Result<u64, HostError> {
-        let host = Host::default();
-        let bytes = vec![b'a'; len];
-        let before = host.as_budget().get_cpu_insns_consumed()?;
-        let err = host.symbol_new_from_slice(&bytes).err().unwrap();
-        assert!(err.error.is_type(ScErrorType::Value));
-        assert!(err.error.is_code(ScErrorCode::InvalidInput));
-        Ok(host.as_budget().get_cpu_insns_consumed()? - before)
-    };
-    // One byte over the limit costs the same as a megabyte over it.
-    assert_eq!(cpu_charged(33)?, cpu_charged(1 << 20)?);
-
+fn assert_oversized_symbol_slice_is_rejected_without_charge(len: usize) -> Result<(), HostError> {
+    let host = Host::default();
+    let bytes = vec![b'a'; len];
+    assert!(HostError::result_matches_err(
+        host.symbol_new_from_slice(&bytes),
+        (ScErrorType::Value, ScErrorCode::InvalidInput)
+    ));
+    assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 0);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 0);
     Ok(())
+}
+
+#[test]
+fn oversized_symbol_slice_is_rejected_without_charge() -> Result<(), HostError> {
+    // One byte over the limit, and a megabyte over it.
+    assert_oversized_symbol_slice_is_rejected_without_charge(33)?;
+    assert_oversized_symbol_slice_is_rejected_without_charge(1 << 20)
 }
